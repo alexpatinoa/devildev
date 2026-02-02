@@ -3,10 +3,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useParams, useRouter } from "next/navigation";
-import { Search, FileText, Globe, BarChart3, Maximize, X, Menu, MessageCircle, Users, Phone, Plus, Loader2, MessageSquare, Send, BrainCircuit, Code, Database, Server, Copy, Check, FolderKanban, ChevronDown, ChevronRight, Folder, FolderOpen, File } from 'lucide-react';
+import { Search, FileText, Globe, BarChart3, Maximize, X, Menu, MessageCircle, Users, Phone, Plus, Loader2, MessageSquare, Send, BrainCircuit, Code, Database, Server, Copy, Check, FolderKanban, ChevronDown, ChevronRight, Folder, FolderOpen, File, Bug, ListTodo, Sparkles, GripVertical } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { getProject, saveProjectArchitecture, updateProjectComponentPositions, ProjectMessage, addMessageToProject, projectChatBot, generatePrompt, initialDocsGeneration, createProjectContextDocs, generateProjectPlan, generateNthPhase, updateProjectContextDocs, getProjectContextDocs, createProjectChat, getProjectChats, getProjectChat, addMessageToProjectChat } from "../../../../actions/project";
 import { SignOutButton, useUser } from '@clerk/nextjs';
+import { ChatMessageList, ChatInput } from '@/components/Project';
 import { triggerReverseArchitectureGeneration, checkProjectArchitectureByGenerationId, checkPendingArchitectureUpdate, triggerPendingArchitectureRegeneration } from '../../../../actions/reverse-architecture';
 import { Json } from 'langchain/tools';
 import RevArchitecture from '@/components/core/revArchitecture';
@@ -51,6 +52,11 @@ interface ProjectArchitectureVersion {
   };
 }
 
+interface DynamicTab {
+  id: 'bug' | 'tasks' | 'features';
+  label: string;
+}
+
 const ProjectPage = () => {
     const params = useParams();
   const router = useRouter();
@@ -71,7 +77,10 @@ const ProjectPage = () => {
   
   const [project, setProject] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'architecture' | 'docs'>('architecture');
+  const [activeTab, setActiveTab] = useState<'architecture' | 'docs' | 'bug' | 'tasks' | 'features'>('architecture');
+  const [openDynamicTabs, setOpenDynamicTabs] = useState<DynamicTab[]>([]);
+  const [draggedTab, setDraggedTab] = useState<string | null>(null);
+  const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
   const [leftActiveTab, setLeftActiveTab] = useState<'chat' | 'structure'>('chat');
   const [repoTree, setRepoTree] = useState<any>(null);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
@@ -408,6 +417,78 @@ const ProjectPage = () => {
       setSelectedComponentOwnership(null);
       setSelectedComponentTitle(null);
     }
+  };
+
+  // Handler to open a dynamic tab (Bug, Tasks, Features)
+  const handleOpenTab = (tabType: 'bug' | 'tasks' | 'features') => {
+    const labels: Record<string, string> = {
+      bug: 'Bug',
+      tasks: 'Tasks',
+      features: 'Features'
+    };
+
+    // Check if tab already open
+    if (!openDynamicTabs.find(t => t.id === tabType)) {
+      setOpenDynamicTabs(prev => [...prev, { id: tabType, label: labels[tabType] }]);
+    }
+    setActiveTab(tabType); // Switch to this tab
+  };
+
+  // Handler to close a dynamic tab
+  const handleCloseTab = (tabId: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation(); // Prevent tab activation when clicking close
+    }
+
+    const filtered = openDynamicTabs.filter(t => t.id !== tabId);
+    setOpenDynamicTabs(filtered);
+
+    // If closing active tab, switch to previous tab or default
+    if (activeTab === tabId) {
+      if (filtered.length > 0) {
+        setActiveTab(filtered[filtered.length - 1].id);
+      } else {
+        setActiveTab('architecture'); // Default to fixed tab
+      }
+    }
+  };
+
+  // Drag and drop handlers for dynamic tabs
+  const handleDragStart = (e: React.DragEvent, tabId: string) => {
+    setDraggedTab(tabId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', tabId);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDropTargetIndex(index);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedTab(null);
+    setDropTargetIndex(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+
+    if (!draggedTab) return;
+
+    const dragIndex = openDynamicTabs.findIndex(t => t.id === draggedTab);
+    if (dragIndex === -1 || dragIndex === dropIndex) {
+      handleDragEnd();
+      return;
+    }
+
+    // Reorder tabs
+    const newTabs = [...openDynamicTabs];
+    const [draggedItem] = newTabs.splice(dragIndex, 1);
+    newTabs.splice(dropIndex, 0, draggedItem);
+
+    setOpenDynamicTabs(newTabs);
+    handleDragEnd();
   };
 
   // Get highlight color for a path based on code ownership
@@ -1035,6 +1116,7 @@ const ProjectPage = () => {
       setMessages(prevMessages => [...prevMessages, assistantMessage]);
       setIsChatLoading(false);
 
+      // DELETE THIS AFTER TESTING  
       if(parsedResponse.prompt && parsedResponse.wannaStart && (parsedResponse.difficulty === "easy" || parsedResponse.difficulty === "medium")){
         // Count existing prompts already generated in this chat
         setIsPromptGenerating(true); 
@@ -1438,161 +1520,33 @@ const ProjectPage = () => {
             </div>
 
             {/* Chat Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-600 hover:scrollbar-thumb-gray-500">
-              {messages.map((message, index) => (
-                <div key={message.id || `fallback-${index}`} className={`flex flex-col ${message.type === 'user' ? 'items-start' : 'items-start'}`}>
-                  <div className="flex w-full">
-                    {message.type === 'assistant' && (
-                      <div className="mr-3 flex-shrink-0">
-                        <Image
-                          src="/favicon.jpg"
-                          alt="Assistant"
-                          width={32}
-                          height={32}
-                          className="rounded-full"
-                        />
-                      </div>
-                    )}
-                    {message.type === 'user' && (
-                      <div className="mr-1 flex-shrink-0">
-                        <Avatar className="size-8">
-                          <AvatarImage src={user?.imageUrl} alt="User" />
-                          <AvatarFallback>U</AvatarFallback>
-                        </Avatar>
-                      </div>
-                    )}
-                    <div className="max-w-[80%] rounded-2xl px-2 py-1 text-white">
-                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                    </div>
-                  </div>
-
-                  {/* Project Docs button - only show for assistant messages with projectDocsId */}
-                  {message.type === 'assistant' && message.projectDocsId && (
-                    <div className="flex justify-start items-center space-x-3 ml-12 h-12 my-2 relative">
-                      <button 
-                        onClick={() => {
-                          setSelectedProjectDocsId(message.projectDocsId);
-                          setSelectedDocsName(message.docsName);
-                          setMobileActivePanel('docs');
-                        }}
-                        className="px-6 py-2 border rounded-lg font-bold cursor-pointer transition-colors duration-200 relative hover:bg-transparent border-white hover:text-white bg-white text-black"
-                      >
-                        <span>View Docs</span>
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Prompt box - only show for assistant messages with prompt */}
-                  {message.type === 'assistant' && message.prompt && (
-                    <div className="w-full mt-3 ">
-                      <div className="border border-gray-600 rounded-lg bg-gray-900/30 relative">
-                        {/* Copy button */}
-                        <button
-                          onClick={() => copyPrompt(message.id, message.prompt!)}
-                          className="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-white hover:bg-gray-700/50 rounded-md transition-all duration-200 z-10"
-                          title="Copy prompt"
-                        >
-                          {copiedPrompts[message.id] ? (
-                            <Check className="h-4 w-4 text-green-400" />
-                          ) : (
-                            <Copy className="h-4 w-4" />
-                          )}
-                        </button>
-                        <div className="p-3 pr-12 max-h-60 overflow-y-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-600 hover:scrollbar-thumb-gray-500">
-                          <pre className="text-sm text-gray-300 whitespace-pre-wrap font-mono break-words">
-                            {message.prompt}
-                          </pre>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-
-              {/* Loading indicator */}
-              {isChatLoading && (
-                <div className="flex justify-start items-center space-x-3 animate-pulse">
-                  <Image
-                    src="/favicon.jpg"
-                    alt="Assistant"
-                    width={32}
-                    height={32}
-                    className="w-8 h-8 rounded-full"
-                  />
-                  <div className="text-white/69 text-sm flex items-center">
-                    <span>thinking</span>
-                    <span className="ml-1">...</span>
-                  </div>
-                </div>
-              )}
-
-              {isPromptGenerating && (
-                <div className="flex justify-start items-center space-x-3 animate-pulse">
-                  <Image
-                    src="/favicon.jpg"
-                    alt="Assistant"
-                    width={32}
-                    height={32}
-                    className="w-8 h-8 rounded-full"
-                  />
-                  <div className="text-white/69 text-sm flex items-center">
-                    <span>generating prompt</span>
-                    <span className="ml-1">...</span>
-                  </div>
-                </div>
-              )}
-
-              {isDocsGenerating && (
-                <div className="flex justify-start items-center space-x-3 animate-pulse">
-                  <Image
-                    src="/favicon.jpg"
-                    alt="Assistant"
-                    width={32}
-                    height={32}
-                    className="w-8 h-8 rounded-full"
-                  />
-                  <div className="text-white/69 text-sm flex items-center">
-                    <span>generating docs</span>
-                    <span className="ml-1">...</span>
-                  </div>
-                </div>
-              )}
-
-              <div ref={messagesEndRef} />
-            </div>
+            <ChatMessageList
+              messages={messages}
+              isChatLoading={isChatLoading}
+              isPromptGenerating={isPromptGenerating}
+              isDocsGenerating={isDocsGenerating}
+              userImageUrl={user?.imageUrl}
+              userInitial={user?.firstName?.charAt(0) || user?.emailAddresses?.[0]?.emailAddress.charAt(0) || 'U'}
+              copiedPrompts={copiedPrompts}
+              onCopyPrompt={copyPrompt}
+              onViewDocs={(projectDocsId, docsName) => {
+                setSelectedProjectDocsId(projectDocsId);
+                setSelectedDocsName(docsName);
+                setMobileActivePanel('docs');
+              }}
+              onOpenTab={handleOpenTab}
+              messagesEndRef={messagesEndRef}
+            />
 
             {/* Input Area */}
-            <div className="p-4 flex-shrink-0">
-              <form onSubmit={handleSubmit} className="relative">
-                <div className="bg-black border-t border-x border-gray-500 backdrop-blur-sm overflow-hidden rounded-t-2xl">
-                  <textarea
-                  placeholder="Ask about your project..."
-                    value={inputMessage}
-                    onChange={handleTextareaChange}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSubmit(e);
-                      }
-                    }}
-                    className="w-full bg-transparent text-white placeholder-gray-400 px-4 py-3 text-sm focus:outline-none resize-none overflow-y-auto min-h-[60px] max-h-[180px]"
-                    rows={2}
-                    style={{ height: textareaHeight }}
-                    maxLength={5000}
-                    disabled={isChatLoading || isCreatingChat}
-                  />
-                </div>
-                <div className="bg-black border-l border-r border-b border-gray-500 backdrop-blur-sm rounded-b-2xl px-3 py-2 flex justify-end">
-                  <button 
-                    type="submit" 
-                    className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
-                    disabled={!inputMessage.trim() || isChatLoading || isCreatingChat}
-                  >
-                    <Send className="h-4 w-4" />
-                  </button>
-                </div>
-              </form>
-            </div>
+            <ChatInput
+              inputMessage={inputMessage}
+              textareaHeight={textareaHeight}
+              isChatLoading={isChatLoading}
+              isCreatingChat={isCreatingChat}
+              onInputChange={handleTextareaChange}
+              onSubmit={handleSubmit}
+            />
           </div>
 
           {/* Mobile bottom bar for Architecture and Pacts */}
@@ -1793,171 +1747,35 @@ const ProjectPage = () => {
           </div>
 
           {/* Chat Messages Tab */}
-          <div className={`flex-1 overflow-y-auto p-4 space-y-4 min-h-0 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-600 hover:scrollbar-thumb-gray-500 ${leftActiveTab === 'chat' ? 'block' : 'hidden'}`}>
+          <div className={`flex-1 min-h-0 flex flex-col ${leftActiveTab === 'chat' ? 'flex' : 'hidden'}`}>
+            <ChatMessageList
+              messages={messages}
+              isChatLoading={isChatLoading}
+              isPromptGenerating={isPromptGenerating}
+              isDocsGenerating={isDocsGenerating}
+              userImageUrl={user?.imageUrl}
+              userInitial={user?.firstName?.charAt(0) || user?.emailAddresses?.[0]?.emailAddress.charAt(0) || 'U'}
+              copiedPrompts={copiedPrompts}
+              onCopyPrompt={copyPrompt}
+              onViewDocs={(projectDocsId, docsName) => {
+                setSelectedProjectDocsId(projectDocsId);
+                setSelectedDocsName(docsName);
+                setActiveTab('docs');
+              }}
+              onOpenTab={handleOpenTab}
+              messagesEndRef={messagesEndRef}
+            />
 
-
-            {/* Display actual messages from database */}
-            {messages.map((message, index) => (
-              <div key={message.id || `fallback-${index}`} className={`flex flex-col ${message.type === 'user' ? 'items-start' : 'items-start'}`}>
-                <div className="flex w-full">
-                  {message.type === 'assistant' && (
-                    <div className="mr-3 flex-shrink-0">
-                      <Image
-                        src="/favicon.jpg"
-                        alt="Assistant"
-                        width={32}
-                        height={32}
-                        className="rounded-full"
-                      />
-                    </div>
-                  )}
-                  {message.type === 'user' && (
-                    <div className="mr-1 flex-shrink-0">
-                      <Avatar className="size-8">
-                        <AvatarImage src={user?.imageUrl} alt="User" />
-                        <AvatarFallback>U</AvatarFallback>
-                      </Avatar>
-                    </div>
-                  )}
-                  <div className="max-w-[80%] rounded-2xl px-2 py-1 text-white">
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                  </div>
-                </div>
-                
-                {/* Project Docs button - only show for assistant messages with projectDocsId */}
-                {message.type === 'assistant' && message.projectDocsId && (
-                  <div className="flex justify-start items-center space-x-3 ml-12 h-12  my-2 relative">
-                    <button 
-                      onClick={() => {
-                        setSelectedProjectDocsId(message.projectDocsId);
-                        setSelectedDocsName(message.docsName);
-                        setActiveTab('docs');
-                      }}
-                      className="px-6 py-2 border rounded-lg font-bold cursor-pointer transition-colors duration-200 relative hover:bg-transparent border-white hover:text-white bg-white text-black"
-                    >
-                      <span>View Docs</span>
-                    </button>
-                  </div>
-                )}
-                
-                {/* Prompt box - only show for assistant messages with prompt */}
-                {message.type === 'assistant' && message.prompt && (
-                  <div className="w-full mt-3 ">
-                    <div className="border border-gray-600 rounded-lg bg-gray-900/30 relative">
-                      {/* Copy button */}
-                      <button
-                        onClick={() => copyPrompt(message.id, message.prompt!)}
-                        className="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-white hover:bg-gray-700/50 rounded-md transition-all duration-200 z-10"
-                        title="Copy prompt"
-                      >
-                        {copiedPrompts[message.id] ? (
-                          <Check className="h-4 w-4 text-green-400" />
-                        ) : (
-                          <Copy className="h-4 w-4" />
-                        )}
-                      </button>
-                      
-                      {/* Prompt content with scrollbar */}
-                      <div className="p-3 pr-12 max-h-60 overflow-y-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-600 hover:scrollbar-thumb-gray-500">
-                        <pre className="text-sm text-gray-300 whitespace-pre-wrap font-mono break-words">
-                          {message.prompt}
-                        </pre>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))} 
-
-            {/* Loading indicator */}
-            {isChatLoading && (
-              <div className="flex justify-start items-center space-x-3 animate-pulse">
-                <Image
-                  src="/favicon.jpg"
-                  alt="Assistant"
-                  width={32}
-                  height={32}
-                  className="w-8 h-8 rounded-full"
-                />
-                <div className="text-white/69 text-sm flex items-center">
-                  <span>thinking</span>
-                  <span className="ml-1">...</span>
-                </div>
-              </div>
-            )}
-
-{isPromptGenerating && (
-              <div className="flex justify-start items-center space-x-3 animate-pulse">
-                <Image
-                  src="/favicon.jpg"
-                  alt="Assistant"
-                  width={32}
-                  height={32}
-                  className="w-8 h-8 rounded-full"
-                />
-                <div className="text-white/69 text-sm flex items-center">
-                  <span>generating prompt</span>
-                  <span className="ml-1">...</span>
-                </div>
-              </div>
-            )}
-
-{isDocsGenerating && (
-              <div className="flex justify-start items-center space-x-3 animate-pulse">
-                <Image
-                  src="/favicon.jpg"
-                  alt="Assistant"
-                  width={32}
-                  height={32}
-                  className="w-8 h-8 rounded-full"
-                />
-                <div className="text-white/69 text-sm flex items-center">
-                  <span>generating docs</span>
-                  <span className="ml-1">...</span>
-                </div>
-              </div>
-            )}
-            
-            {/* Auto-scroll target */}
-            <div ref={messagesEndRef} />
+            {/* Input Area - Only show for chat tab */}
+            <ChatInput
+              inputMessage={inputMessage}
+              textareaHeight={textareaHeight}
+              isChatLoading={isChatLoading || isCharacterLimitReached || isPromptLimitReached}
+              isCreatingChat={isCreatingChat}
+              onInputChange={handleTextareaChange}
+              onSubmit={handleSubmit}
+            />
           </div>
-
-          {/* Input Area - Only show for chat tab */}
-          {leftActiveTab === 'chat' && (
-            <div className="p-4 flex-shrink-0">
-              <form onSubmit={handleSubmit} className="relative">
-                <div className="bg-black border-t border-x border-gray-500 backdrop-blur-sm overflow-hidden rounded-t-2xl">
-                  <textarea
-                    placeholder="Ask about your project..."
-                    value={inputMessage}
-                    onChange={handleTextareaChange}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSubmit(e);
-                      }
-                    }}
-                    className="w-full bg-transparent text-white placeholder-gray-400 px-4 py-3 text-sm md:text-base focus:outline-none resize-none overflow-y-auto min-h-[60px] max-h-[180px]"
-                    rows={2}
-                    style={{ height: textareaHeight }}
-                    maxLength={5000}
-                    disabled={isChatLoading || isCreatingChat || isCharacterLimitReached || isPromptLimitReached}
-                  />
-                </div>
-
-                {/* Button section */}
-                <div className="bg-black border-l border-r border-b border-gray-500 backdrop-blur-sm rounded-b-2xl px-3 py-2 flex justify-end">
-                  <button
-                    type="submit"
-                    className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
-                    disabled={!inputMessage.trim() || isChatLoading || isCreatingChat || isCharacterLimitReached || isPromptLimitReached}
-                  >
-                    <Send className="h-4 w-4" />
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
         </div>
 
         {/* Resize Handle */}
@@ -1980,11 +1798,8 @@ const ProjectPage = () => {
         >
           {/* Tab Headers */}
           <div className="flex items-center justify-between px-4 py-3 rounded-t-xl border-b border-gray-800">
-            <div className="flex space-x-1"> 
-              {/* <button
-              
-              */}
-              
+            <div className="flex items-center space-x-1">
+              {/* Fixed Tabs */}
               <button
                 onClick={() => setActiveTab('architecture')}
                 className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${
@@ -2006,6 +1821,56 @@ const ProjectPage = () => {
               >
                 Pacts
               </button>
+
+              {/* Divider - only show if there are dynamic tabs */}
+              {openDynamicTabs.length > 0 && (
+                <div className="h-6 w-px bg-gray-700 mx-2" />
+              )}
+
+              {/* Dynamic Draggable Tabs */}
+              {openDynamicTabs.map((tab, index) => {
+                const iconMap: Record<string, React.ReactNode> = {
+                  bug: <Bug className="h-3.5 w-3.5" />,
+                  tasks: <ListTodo className="h-3.5 w-3.5" />,
+                  features: <Sparkles className="h-3.5 w-3.5" />,
+                };
+
+                const colorMap: Record<string, string> = {
+                  bug: 'text-red-400',
+                  tasks: 'text-blue-400',
+                  features: 'text-purple-400',
+                };
+
+                return (
+                  <div
+                    key={tab.id}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, tab.id)}
+                    onDragOver={(e) => handleDragOver(e, index)}
+                    onDrop={(e) => handleDrop(e, index)}
+                    onDragEnd={handleDragEnd}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex items-center space-x-1.5 px-2 py-1 text-sm font-medium rounded-md transition-all duration-200 cursor-grab group ${
+                      activeTab === tab.id
+                        ? 'text-white bg-gray-700/50 border border-gray-600'
+                        : 'text-gray-400 hover:text-white bg-gray-800/50 border border-gray-700/50 hover:border-gray-600'
+                    } ${draggedTab === tab.id ? 'opacity-50 cursor-grabbing' : ''} ${
+                      dropTargetIndex === index && draggedTab !== tab.id ? 'border-l-2 border-l-blue-500' : ''
+                    }`}
+                  >
+                    <GripVertical className="h-3 w-3 text-gray-500 group-hover:text-gray-400" />
+                    <span className={colorMap[tab.id]}>{iconMap[tab.id]}</span>
+                    <span>{tab.label}</span>
+                    <button
+                      onClick={(e) => handleCloseTab(tab.id, e)}
+                      className="ml-1 p-0.5 rounded hover:bg-red-500/20 hover:text-red-400 transition-colors"
+                      title={`Close ${tab.label} tab`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
             
             {/* Version dropdown and Fullscreen button - only show for architecture tab */}
@@ -2150,7 +2015,7 @@ const ProjectPage = () => {
 
             {/* Pacts Tab */}
             <div className={`h-full ${activeTab === 'docs' ? 'block' : 'hidden'}`}>
-              <ProjectContextDocs 
+              <ProjectContextDocs
                 key={activeChatId || 'no-chat'}
                 projectId={projectId}
                 projectChatId={activeChatId}
@@ -2159,6 +2024,45 @@ const ProjectPage = () => {
                 projectPlan={projectPlan}
                 projectPhases={projectPhases}
               />
+            </div>
+
+            {/* Bug Tab */}
+            <div className={`h-full ${activeTab === 'bug' ? 'flex' : 'hidden'} flex-col items-center justify-center`}>
+              <div className="text-center p-8">
+                <div className="p-6 bg-red-500/10 rounded-2xl inline-block mb-4">
+                  <Bug className="w-12 h-12 text-red-400" />
+                </div>
+                <h3 className="text-xl font-semibold text-white mb-2">Bug Tracking</h3>
+                <p className="text-gray-400 max-w-md">
+                  Track and manage bugs in your project. This feature is coming soon.
+                </p>
+              </div>
+            </div>
+
+            {/* Tasks Tab */}
+            <div className={`h-full ${activeTab === 'tasks' ? 'flex' : 'hidden'} flex-col items-center justify-center`}>
+              <div className="text-center p-8">
+                <div className="p-6 bg-blue-500/10 rounded-2xl inline-block mb-4">
+                  <ListTodo className="w-12 h-12 text-blue-400" />
+                </div>
+                <h3 className="text-xl font-semibold text-white mb-2">Task Management</h3>
+                <p className="text-gray-400 max-w-md">
+                  Organize and track your project tasks. This feature is coming soon.
+                </p>
+              </div>
+            </div>
+
+            {/* Features Tab */}
+            <div className={`h-full ${activeTab === 'features' ? 'flex' : 'hidden'} flex-col items-center justify-center`}>
+              <div className="text-center p-8">
+                <div className="p-6 bg-purple-500/10 rounded-2xl inline-block mb-4">
+                  <Sparkles className="w-12 h-12 text-purple-400" />
+                </div>
+                <h3 className="text-xl font-semibold text-white mb-2">Feature Requests</h3>
+                <p className="text-gray-400 max-w-md">
+                  Plan and prioritize new features for your project. This feature is coming soon.
+                </p>
+              </div>
             </div>
           </div>
         </div>
