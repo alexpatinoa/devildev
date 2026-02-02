@@ -130,6 +130,18 @@ model Feedback {
   updatedAt DateTime @updatedAt
 }
 
+enum PactType {
+  BUG
+  TASK
+  FEATURE
+}
+
+enum PactStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
 model Project {
   id        String   @id @default(uuid())
   userId    String
@@ -149,6 +161,8 @@ model Project {
   updatedAt DateTime @updatedAt
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   ProjectArchitecture ProjectArchitecture[]
+
+  pacts Pact[]
 
   // Pending architecture update fields (for tiered regeneration)
   needsArchitectureUpdate    Boolean   @default(false)
@@ -176,6 +190,24 @@ model ProjectArchitecture {
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId, createdAt(sort: Desc)])
+}
+
+model Pact {
+  id          String     @id @default(uuid())
+  projectId   String
+  type        PactType
+  status      PactStatus @default(PENDING)
+  head        String
+  body        String?    @db.Text
+  githubIssue Json?
+  
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // Indexing for fast retrieval
+  @@index([projectId, type])      
 }
 
 model ProjectChat {
