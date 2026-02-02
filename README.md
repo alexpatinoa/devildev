@@ -9,10 +9,10 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.2.0-blue" />
-   <img src="https://img.shields.io/badge/status-experimental-orange" />
+  <img src="https://img.shields.io/badge/version-0.2.0-blue" alt="Version 0.2.0" />
+   <img src="https://img.shields.io/badge/status-experimental-orange" alt="Status: Experimental" />
    <a href="https://opensource.org/licenses/Apache-2.0">
-    <img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" />
+    <img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License: Apache 2.0" />
   </a>
 
 <p align="center">

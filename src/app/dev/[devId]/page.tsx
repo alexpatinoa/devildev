@@ -1467,7 +1467,7 @@ const DevPage = () => {
                       <div className="mr-3 flex-shrink-0">
                         <Image
                           src="/favicon.jpg"
-                          alt="Assistant"
+                          alt="DevilDev AI assistant"
                           width={32}
                           height={32}
                           className="rounded-full"
@@ -1477,7 +1477,7 @@ const DevPage = () => {
                     {message.type === 'user' && (
                       <div className="mr-1 flex-shrink-0">
                         <Avatar className="size-8">
-                          <AvatarImage src="https://github.com/shadcn.png" alt="User" />
+                          <AvatarImage src="https://github.com/shadcn.png" alt="User avatar" />
                           <AvatarFallback>U</AvatarFallback>
                         </Avatar>
                       </div>
@@ -1530,7 +1530,7 @@ const DevPage = () => {
                   <div className="flex justify-start items-center space-x-3 animate-pulse">
                     <Image
                       src="/favicon.jpg"
-                      alt="Assistant"
+                      alt="DevilDev AI assistant"
                       width={32}
                       height={32}
                       className="w-8 h-8 rounded-full "
@@ -1565,7 +1565,7 @@ const DevPage = () => {
                   <div className="flex justify-start items-center space-x-3 animate-pulse">
                   <Image
                     src="/favicon.jpg"
-                    alt="Assistant"
+                    alt="DevilDev AI assistant"
                     width={32}
                     height={32}
                     className="w-8 h-8 rounded-full "
@@ -1600,7 +1600,7 @@ const DevPage = () => {
                     <div className="flex justify-start items-center space-x-3 animate-pulse">
                     <Image
                       src="/favicon.jpg"
-                      alt="Assistant"
+                      alt="DevilDev AI assistant"
                       width={32}
                       height={32}
                       className="w-8 h-8 rounded-full "
@@ -1860,7 +1860,7 @@ const DevPage = () => {
                       <div className="mr-3 flex-shrink-0">
                         <Image
                           src="/favicon.jpg"
-                          alt="Assistant"
+                          alt="DevilDev AI assistant"
                           width={32}
                           height={32}
                           className="rounded-full"
@@ -1870,7 +1870,7 @@ const DevPage = () => {
                     {message.type === 'user' && (
                       <div className="mr-1 flex-shrink-0">
                         <Avatar className="size-8">
-                          <AvatarImage src="https://github.com/shadcn.png" alt="User" />
+                          <AvatarImage src="https://github.com/shadcn.png" alt="User avatar" />
                           <AvatarFallback>U</AvatarFallback>
                         </Avatar>
                       </div>
@@ -1923,7 +1923,7 @@ const DevPage = () => {
                   <div className="flex justify-start items-center space-x-3 animate-pulse">
                     <Image
                       src="/favicon.jpg"
-                      alt="Assistant"
+                      alt="DevilDev AI assistant"
                       width={32}
                       height={32}
                       className="w-8 h-8 rounded-full "
@@ -1958,7 +1958,7 @@ const DevPage = () => {
                   <div className="flex justify-start items-center space-x-3 animate-pulse">
                   <Image
                     src="/favicon.jpg"
-                    alt="Assistant"
+                    alt="DevilDev AI assistant"
                     width={32}
                     height={32}
                     className="w-8 h-8 rounded-full "
@@ -1993,7 +1993,7 @@ const DevPage = () => {
                     <div className="flex justify-start items-center space-x-3 animate-pulse">
                     <Image
                       src="/favicon.jpg"
-                      alt="Assistant"
+                      alt="DevilDev AI assistant"
                       width={32}
                       height={32}
                       className="w-8 h-8 rounded-full "
