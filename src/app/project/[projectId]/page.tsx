@@ -122,7 +122,17 @@ const ProjectPage = () => {
   const [selectedDocsName, setSelectedDocsName] = useState<string | undefined>(undefined);
   
   // Pact tracking state
-  const [pacts, setPacts] = useState<Pact[]>([]);
+  const [pactsCache, setPactsCache] = useState<{
+    BUG: Pact[];
+    TASK: Pact[];
+    FEATURE: Pact[];
+    isLoaded: boolean;
+  }>({
+    BUG: [],
+    TASK: [],
+    FEATURE: [],
+    isLoaded: false
+  });
   const [isPactDialogOpen, setIsPactDialogOpen] = useState(false);
   const [currentPactType, setCurrentPactType] = useState<PactType>('BUG');
   const [projectPlan, setProjectPlan] = useState<string>("Not Generated");
@@ -471,21 +481,15 @@ const ProjectPage = () => {
   };
 
   // Handler for successful pact creation
-  const handlePactCreated = async () => {
-    // Refetch pacts for the current tab
-    if (activeTab === 'bug' || activeTab === 'tasks' || activeTab === 'features') {
-      const typeMap: Record<string, PactType> = {
-        bug: 'BUG',
-        tasks: 'TASK',
-        features: 'FEATURE'
-      };
-      
-      const type = typeMap[activeTab];
-      const result = await getPactsByProject(projectId, type);
-      
-      if (result.success && result.pacts) {
-        setPacts(result.pacts as Pact[]);
-      }
+  const handlePactCreated = async (createdPactType: PactType) => {
+    // Refetch only the affected pact type using indexed query
+    const result = await getPactsByProject(projectId, createdPactType);
+    
+    if (result.success && result.pacts) {
+      setPactsCache(prev => ({
+        ...prev,
+        [createdPactType]: result.pacts as Pact[]
+      }));
     }
   };
 
@@ -1025,30 +1029,28 @@ const ProjectPage = () => {
     setIsPromptLimitReached(existingPromptCount >= 3);
   }, [messages]);
 
-  // Fetch pacts when tab changes to bug/tasks/features or on initial load
+  // Fetch all pacts on initial load (leveraging database index for each type)
   useEffect(() => {
-    const fetchPacts = async () => {
-      if (!projectId || !isSignedIn) return;
+    const fetchAllPacts = async () => {
+      if (!projectId || !isSignedIn || pactsCache.isLoaded) return;
       
-      // Only fetch if on a pact tab
-      if (activeTab === 'bug' || activeTab === 'tasks' || activeTab === 'features') {
-        const typeMap: Record<string, PactType> = {
-          bug: 'BUG',
-          tasks: 'TASK',
-          features: 'FEATURE'
-        };
-        
-        const type = typeMap[activeTab];
-        const result = await getPactsByProject(projectId, type);
-        
-        if (result.success && result.pacts) {
-          setPacts(result.pacts as Pact[]);
-        }
-      }
+      // Fetch all three types in parallel using indexed queries
+      const [bugResult, taskResult, featureResult] = await Promise.all([
+        getPactsByProject(projectId, 'BUG'),
+        getPactsByProject(projectId, 'TASK'),
+        getPactsByProject(projectId, 'FEATURE')
+      ]);
+      
+      setPactsCache({
+        BUG: bugResult.success && bugResult.pacts ? (bugResult.pacts as Pact[]) : [],
+        TASK: taskResult.success && taskResult.pacts ? (taskResult.pacts as Pact[]) : [],
+        FEATURE: featureResult.success && featureResult.pacts ? (featureResult.pacts as Pact[]) : [],
+        isLoaded: true
+      });
     };
     
-    fetchPacts();
-  }, [activeTab, projectId, isSignedIn]);
+    fetchAllPacts();
+  }, [projectId, isSignedIn, pactsCache.isLoaded]);
 
 
   // Handle mouse events for resizing
@@ -2103,7 +2105,7 @@ const ProjectPage = () => {
                   Add Bug
                 </Button>
               </div>
-              <PactList pacts={pacts} pactType="BUG" />
+              <PactList pacts={pactsCache.BUG} pactType="BUG" />
             </div>
 
             {/* Tasks Tab */}
@@ -2122,7 +2124,7 @@ const ProjectPage = () => {
                   Add Task
                 </Button>
               </div>
-              <PactList pacts={pacts} pactType="TASK" />
+              <PactList pacts={pactsCache.TASK} pactType="TASK" />
             </div>
 
             {/* Features Tab */}
@@ -2141,7 +2143,7 @@ const ProjectPage = () => {
                   Add Feature
                 </Button>
               </div>
-              <PactList pacts={pacts} pactType="FEATURE" />
+              <PactList pacts={pactsCache.FEATURE} pactType="FEATURE" />
             </div>
           </div>
         </div>

@@ -61,9 +61,6 @@ export default function PactList({ pacts, pactType }: PactListProps) {
   const config = pactConfig[pactType as keyof typeof pactConfig];
   const Icon = config.icon;
 
-  // Filter pacts to only show the correct type
-  const filteredPacts = pacts.filter(pact => pact.type === pactType);
-
   const toggleExpand = (pactId: string) => {
     setExpandedIds(prev => {
       const newSet = new Set(prev);
@@ -76,7 +73,7 @@ export default function PactList({ pacts, pactType }: PactListProps) {
     });
   };
 
-  if (filteredPacts.length === 0) {
+  if (pacts.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-8">
         <div className={`p-6 ${config.bgColor} rounded-2xl inline-block mb-4`}>
@@ -94,7 +91,7 @@ export default function PactList({ pacts, pactType }: PactListProps) {
 
   return (
     <div className="h-full overflow-y-auto p-6 space-y-3">
-      {filteredPacts.map((pact) => {
+      {pacts.map((pact) => {
         const isExpanded = expandedIds.has(pact.id);
         const hasBody = pact.body && pact.body.trim().length > 0;
 

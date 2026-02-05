@@ -13,7 +13,7 @@ interface PactDialogProps {
   onOpenChange: (open: boolean) => void;
   pactType: PactType;
   projectId: string;
-  onSuccess: () => void;
+  onSuccess: (pactType: PactType) => void;
 }
 
 const pactConfig = {
@@ -80,7 +80,7 @@ export default function PactDialog({ open, onOpenChange, pactType, projectId, on
       setBody('');
       setIsLoading(false);
       onOpenChange(false);
-      onSuccess();
+      onSuccess(pactType);
     } catch (err) {
       setError('An unexpected error occurred');
       setIsLoading(false);
