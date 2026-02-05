@@ -3,22 +3,23 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useParams, useRouter } from "next/navigation";
-import { Search, FileText, Globe, BarChart3, Maximize, X, Menu, MessageCircle, Users, Phone, Plus, Loader2, MessageSquare, Send, BrainCircuit, Code, Database, Server, Copy, Check, FolderKanban, ChevronDown, ChevronRight, Folder, FolderOpen, File, Bug, ListTodo, Sparkles, GripVertical } from 'lucide-react';
+import { Maximize, X, Menu, MessageCircle, Plus, Loader2, MessageSquare, BrainCircuit, FolderKanban, ChevronDown, ChevronRight, Folder, FolderOpen, File, Bug, ListTodo, Sparkles, GripVertical } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { getProject, saveProjectArchitecture, updateProjectComponentPositions, ProjectMessage, addMessageToProject, projectChatBot, generatePrompt, initialDocsGeneration, createProjectContextDocs, generateProjectPlan, generateNthPhase, updateProjectContextDocs, getProjectContextDocs, createProjectChat, getProjectChats, getProjectChat, addMessageToProjectChat } from "../../../../actions/project";
+import { getProject, updateProjectComponentPositions, ProjectMessage, projectChatBot, generatePrompt, createProjectContextDocs, generateProjectPlan, generateNthPhase, updateProjectContextDocs, createProjectChat, getProjectChat, addMessageToProjectChat } from "../../../../actions/project";
 import { SignOutButton, useUser } from '@clerk/nextjs';
 import { ChatMessageList, ChatInput } from '@/components/Project';
+import { getPactsByProject, Pact, PactType } from "../../../../actions/project/pacts";
+import PactDialog from '@/components/Project/PactDialog';
+import PactList from '@/components/Project/PactList';
 import { triggerReverseArchitectureGeneration, checkProjectArchitectureByGenerationId, checkPendingArchitectureUpdate, triggerPendingArchitectureRegeneration } from '../../../../actions/reverse-architecture';
-import { Json } from 'langchain/tools';
 import RevArchitecture from '@/components/core/revArchitecture';
 import ProjectContextDocs from '@/components/core/ProjectContextDocs';
 import { ProjectPageSkeleton } from '@/components/ui/project-skeleton';
-import { generateWebSearchDocs, saveProjectSummarizedContext, saveProjectWebSearchDocs, summarizeProjectDocsContext } from '../../../../actions/projectDocs';
+import { summarizeProjectDocsContext } from '../../../../actions/projectDocs';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { submitFeedback } from '../../../../actions/feedback';
-import { maxChatCharactersLimitFree, maxChatCharactersLimitPro, maxFreeChats, maxNumberOfProjectChatsFree, maxNumberOfProjectChatsPro } from '../../../../Limits';
+import { maxChatCharactersLimitFree, maxChatCharactersLimitPro, maxNumberOfProjectChatsFree, maxNumberOfProjectChatsPro } from '../../../../Limits';
 import useUserSubscription from '@/hooks/useSubscription';
 import PricingDialog from '@/components/PricingDialog';
 
@@ -119,6 +120,11 @@ const ProjectPage = () => {
   const [isCreatingChat, setIsCreatingChat] = useState(false);
   const [selectedProjectDocsId, setSelectedProjectDocsId] = useState<string | undefined>(undefined);
   const [selectedDocsName, setSelectedDocsName] = useState<string | undefined>(undefined);
+  
+  // Pact tracking state
+  const [pacts, setPacts] = useState<Pact[]>([]);
+  const [isPactDialogOpen, setIsPactDialogOpen] = useState(false);
+  const [currentPactType, setCurrentPactType] = useState<PactType>('BUG');
   const [projectPlan, setProjectPlan] = useState<string>("Not Generated");
   const [projectPhases, setProjectPhases] = useState<string[]>(["Not Generated 1", "Not Generated 2"]); 
   const [isCharacterLimitReached, setIsCharacterLimitReached] = useState(false);
@@ -449,6 +455,36 @@ const ProjectPage = () => {
         setActiveTab(filtered[filtered.length - 1].id);
       } else {
         setActiveTab('architecture'); // Default to fixed tab
+      }
+    }
+  };
+
+  // Handler to open pact dialog
+  const handleOpenPactDialog = (tabType: 'bug' | 'tasks' | 'features') => {
+    const typeMap: Record<string, PactType> = {
+      bug: 'BUG',
+      tasks: 'TASK',
+      features: 'FEATURE'
+    };
+    setCurrentPactType(typeMap[tabType]);
+    setIsPactDialogOpen(true);
+  };
+
+  // Handler for successful pact creation
+  const handlePactCreated = async () => {
+    // Refetch pacts for the current tab
+    if (activeTab === 'bug' || activeTab === 'tasks' || activeTab === 'features') {
+      const typeMap: Record<string, PactType> = {
+        bug: 'BUG',
+        tasks: 'TASK',
+        features: 'FEATURE'
+      };
+      
+      const type = typeMap[activeTab];
+      const result = await getPactsByProject(projectId, type);
+      
+      if (result.success && result.pacts) {
+        setPacts(result.pacts as Pact[]);
       }
     }
   };
@@ -988,6 +1024,31 @@ const ProjectPage = () => {
     setIsCharacterLimitReached(totalCharacters >= MAX_CHARACTERS);
     setIsPromptLimitReached(existingPromptCount >= 3);
   }, [messages]);
+
+  // Fetch pacts when tab changes to bug/tasks/features or on initial load
+  useEffect(() => {
+    const fetchPacts = async () => {
+      if (!projectId || !isSignedIn) return;
+      
+      // Only fetch if on a pact tab
+      if (activeTab === 'bug' || activeTab === 'tasks' || activeTab === 'features') {
+        const typeMap: Record<string, PactType> = {
+          bug: 'BUG',
+          tasks: 'TASK',
+          features: 'FEATURE'
+        };
+        
+        const type = typeMap[activeTab];
+        const result = await getPactsByProject(projectId, type);
+        
+        if (result.success && result.pacts) {
+          setPacts(result.pacts as Pact[]);
+        }
+      }
+    };
+    
+    fetchPacts();
+  }, [activeTab, projectId, isSignedIn]);
 
 
   // Handle mouse events for resizing
@@ -2027,42 +2088,60 @@ const ProjectPage = () => {
             </div>
 
             {/* Bug Tab */}
-            <div className={`h-full ${activeTab === 'bug' ? 'flex' : 'hidden'} flex-col items-center justify-center`}>
-              <div className="text-center p-8">
-                <div className="p-6 bg-red-500/10 rounded-2xl inline-block mb-4">
-                  <Bug className="w-12 h-12 text-red-400" />
-                </div>
-                <h3 className="text-xl font-semibold text-white mb-2">Bug Tracking</h3>
-                <p className="text-gray-400 max-w-md">
-                  Track and manage bugs in your project. This feature is coming soon.
-                </p>
+            <div className={`h-full ${activeTab === 'bug' ? 'flex' : 'hidden'} flex-col`}>
+              <div className="flex items-center justify-between p-4 border-b border-gray-700/50">
+                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                  <Bug className="w-5 h-5 text-red-400" />
+                  Bug Tracking
+                </h3>
+                <Button
+                  onClick={() => handleOpenPactDialog('bug')}
+                  className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30"
+                  size="sm"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Bug
+                </Button>
               </div>
+              <PactList pacts={pacts} pactType="BUG" />
             </div>
 
             {/* Tasks Tab */}
-            <div className={`h-full ${activeTab === 'tasks' ? 'flex' : 'hidden'} flex-col items-center justify-center`}>
-              <div className="text-center p-8">
-                <div className="p-6 bg-blue-500/10 rounded-2xl inline-block mb-4">
-                  <ListTodo className="w-12 h-12 text-blue-400" />
-                </div>
-                <h3 className="text-xl font-semibold text-white mb-2">Task Management</h3>
-                <p className="text-gray-400 max-w-md">
-                  Organize and track your project tasks. This feature is coming soon.
-                </p>
+            <div className={`h-full ${activeTab === 'tasks' ? 'flex' : 'hidden'} flex-col`}>
+              <div className="flex items-center justify-between p-4 border-b border-gray-700/50">
+                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                  <ListTodo className="w-5 h-5 text-blue-400" />
+                  Task Management
+                </h3>
+                <Button
+                  onClick={() => handleOpenPactDialog('tasks')}
+                  className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                  size="sm"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Task
+                </Button>
               </div>
+              <PactList pacts={pacts} pactType="TASK" />
             </div>
 
             {/* Features Tab */}
-            <div className={`h-full ${activeTab === 'features' ? 'flex' : 'hidden'} flex-col items-center justify-center`}>
-              <div className="text-center p-8">
-                <div className="p-6 bg-purple-500/10 rounded-2xl inline-block mb-4">
-                  <Sparkles className="w-12 h-12 text-purple-400" />
-                </div>
-                <h3 className="text-xl font-semibold text-white mb-2">Feature Requests</h3>
-                <p className="text-gray-400 max-w-md">
-                  Plan and prioritize new features for your project. This feature is coming soon.
-                </p>
+            <div className={`h-full ${activeTab === 'features' ? 'flex' : 'hidden'} flex-col`}>
+              <div className="flex items-center justify-between p-4 border-b border-gray-700/50">
+                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-purple-400" />
+                  Feature Requests
+                </h3>
+                <Button
+                  onClick={() => handleOpenPactDialog('features')}
+                  className="bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30"
+                  size="sm"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Feature
+                </Button>
               </div>
+              <PactList pacts={pacts} pactType="FEATURE" />
             </div>
           </div>
         </div>
@@ -2275,6 +2354,15 @@ const ProjectPage = () => {
         open={showCharacterLimitDialog} 
         onOpenChange={setShowCharacterLimitDialog}
         description="You've reached the maximum token limit for this chat. Upgrade to Pro to unlock extended token limits and continue your conversation."
+      />
+
+      {/* Pact Creation Dialog */}
+      <PactDialog
+        open={isPactDialogOpen}
+        onOpenChange={setIsPactDialogOpen}
+        pactType={currentPactType}
+        projectId={projectId}
+        onSuccess={handlePactCreated}
       />
     </div>
   );
