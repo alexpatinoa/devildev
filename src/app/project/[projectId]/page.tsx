@@ -8,6 +8,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { getProject, updateProjectComponentPositions, ProjectMessage, projectChatBot, generatePrompt, createProjectContextDocs, generateProjectPlan, generateNthPhase, updateProjectContextDocs, createProjectChat, getProjectChat, addMessageToProjectChat } from "../../../../actions/project";
 import { SignOutButton, useUser } from '@clerk/nextjs';
 import { ChatMessageList, ChatInput } from '@/components/Project';
+import PactDetailView from '@/components/Project/PactDetailView';
 import { getPactsByProject, Pact, PactType } from "../../../../actions/project/pacts";
 import PactCreationForm from '@/components/Project/PactCreationForm';
 import PactList from '@/components/Project/PactList';
@@ -135,6 +136,7 @@ const ProjectPage = () => {
   });
   const [isCreatingPact, setIsCreatingPact] = useState(false);
   const [creatingPactType, setCreatingPactType] = useState<PactType>('BUG');
+  const [selectedPact, setSelectedPact] = useState<Pact | null>(null);
   const [projectPlan, setProjectPlan] = useState<string>("Not Generated");
   const [projectPhases, setProjectPhases] = useState<string[]>(["Not Generated 1", "Not Generated 2"]); 
   const [isCharacterLimitReached, setIsCharacterLimitReached] = useState(false);
@@ -2092,23 +2094,26 @@ const ProjectPage = () => {
 
             {/* Bug Tab */}
             <div className={`h-full ${activeTab === 'bug' ? 'flex' : 'hidden'} flex-col`}>
-              {!isCreatingPact || creatingPactType !== 'BUG' ? (
+              {selectedPact && selectedPact.type === 'BUG' ? (
+                // Detail view
+                <PactDetailView pact={selectedPact} pactType="BUG" onBack={() => setSelectedPact(null)} />
+              ) : !isCreatingPact || creatingPactType !== 'BUG' ? (
                 <>
                   <div className="flex items-center justify-between p-4 border-b border-gray-700/50">
                     <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                      <Bug className="w-5 h-5 text-red-400" />
+                      <Bug className="w-4 h-4 text-gray-400" />
                       Bug Tracking
                     </h3>
                     <Button
                       onClick={() => handleOpenPactDialog('bug')}
-                      className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30"
+                      className="bg-gray-500/10 hover:bg-gray-500/20 text-gray-300 border border-gray-500/30"
                       size="sm"
                     >
                       <Plus className="w-4 h-4 mr-2" />
                       Add Bug
                     </Button>
                   </div>
-                  <PactList pacts={pactsCache.BUG} pactType="BUG" />
+                  <PactList pacts={pactsCache.BUG} pactType="BUG" onSelectPact={setSelectedPact} />
                 </>
               ) : (
                 <PactCreationForm
@@ -2122,23 +2127,26 @@ const ProjectPage = () => {
 
             {/* Tasks Tab */}
             <div className={`h-full ${activeTab === 'tasks' ? 'flex' : 'hidden'} flex-col`}>
-              {!isCreatingPact || creatingPactType !== 'TASK' ? (
+              {selectedPact && selectedPact.type === 'TASK' ? (
+                // Detail view
+                <PactDetailView pact={selectedPact} pactType="TASK" onBack={() => setSelectedPact(null)} />
+              ) : !isCreatingPact || creatingPactType !== 'TASK' ? (
                 <>
                   <div className="flex items-center justify-between p-4 border-b border-gray-700/50">
                     <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                      <ListTodo className="w-5 h-5 text-blue-400" />
+                      <ListTodo className="w-4 h-4 text-gray-400" />
                       Task Management
                     </h3>
                     <Button
                       onClick={() => handleOpenPactDialog('tasks')}
-                      className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                      className="bg-gray-500/10 hover:bg-gray-500/20 text-gray-300 border border-gray-500/30"
                       size="sm"
                     >
                       <Plus className="w-4 h-4 mr-2" />
                       Add Task
                     </Button>
                   </div>
-                  <PactList pacts={pactsCache.TASK} pactType="TASK" />
+                  <PactList pacts={pactsCache.TASK} pactType="TASK" onSelectPact={setSelectedPact} />
                 </>
               ) : (
                 <PactCreationForm
@@ -2152,23 +2160,26 @@ const ProjectPage = () => {
 
             {/* Features Tab */}
             <div className={`h-full ${activeTab === 'features' ? 'flex' : 'hidden'} flex-col`}>
-              {!isCreatingPact || creatingPactType !== 'FEATURE' ? (
+              {selectedPact && selectedPact.type === 'FEATURE' ? (
+                // Detail view
+                <PactDetailView pact={selectedPact} pactType="FEATURE" onBack={() => setSelectedPact(null)} />
+              ) : !isCreatingPact || creatingPactType !== 'FEATURE' ? (
                 <>
                   <div className="flex items-center justify-between p-4 border-b border-gray-700/50">
                     <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                      <Sparkles className="w-5 h-5 text-purple-400" />
+                      <Sparkles className="w-4 h-4 text-gray-400" />
                       Feature Requests
                     </h3>
                     <Button
                       onClick={() => handleOpenPactDialog('features')}
-                      className="bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30"
+                      className="bg-gray-500/10 hover:bg-gray-500/20 text-gray-300 border border-gray-500/30"
                       size="sm"
                     >
                       <Plus className="w-4 h-4 mr-2" />
                       Add Feature
                     </Button>
                   </div>
-                  <PactList pacts={pactsCache.FEATURE} pactType="FEATURE" />
+                  <PactList pacts={pactsCache.FEATURE} pactType="FEATURE" onSelectPact={setSelectedPact} />
                 </>
               ) : (
                 <PactCreationForm

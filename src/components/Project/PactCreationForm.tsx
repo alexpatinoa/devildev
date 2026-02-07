@@ -19,29 +19,29 @@ const pactConfig = {
   BUG: {
     label: 'Bug',
     icon: Bug,
-    color: 'red',
-    bgColor: 'bg-red-500/10',
-    borderColor: 'border-red-500/30',
-    textColor: 'text-red-400',
-    iconColor: 'text-red-400'
+    color: 'gray',
+    bgColor: 'bg-gray-500/10',
+    borderColor: 'border-gray-500/30',
+    textColor: 'text-gray-300',
+    iconColor: 'text-gray-400'
   },
   TASK: {
     label: 'Task',
     icon: ListTodo,
-    color: 'blue',
-    bgColor: 'bg-blue-500/10',
-    borderColor: 'border-blue-500/30',
-    textColor: 'text-blue-400',
-    iconColor: 'text-blue-400'
+    color: 'gray',
+    bgColor: 'bg-gray-500/10',
+    borderColor: 'border-gray-500/30',
+    textColor: 'text-gray-300',
+    iconColor: 'text-gray-400'
   },
   FEATURE: {
     label: 'Feature',
     icon: Sparkles,
-    color: 'purple',
-    bgColor: 'bg-purple-500/10',
-    borderColor: 'border-purple-500/30',
-    textColor: 'text-purple-400',
-    iconColor: 'text-purple-400'
+    color: 'gray',
+    bgColor: 'bg-gray-500/10',
+    borderColor: 'border-gray-500/30',
+    textColor: 'text-gray-300',
+    iconColor: 'text-gray-400'
   }
 };
 
@@ -114,22 +114,24 @@ export default function PactCreationForm({ pactType, projectId, onSuccess, onCan
   return (
     <form onSubmit={handleSubmit} className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-6 pt-6 pb-4 border-b border-gray-700/50">
-        <div className="flex items-center gap-3 mb-2">
-          <div className={`p-3 ${config.bgColor} rounded-lg`}>
-            <Icon className={`w-6 h-6 ${config.iconColor}`} />
+      <div className="px-6 pt-6 pb-5 border-b border-gray-800">
+        <div className="flex items-center gap-3 mb-3">
+          <div className={`p-2.5 ${config.bgColor} rounded-lg`}>
+            <Icon className={`w-5 h-5 ${config.iconColor}`} />
           </div>
-          <h3 className="text-xl font-semibold text-white">
-            Create New {config.label}
-          </h3>
+          <div>
+            <h3 className="text-lg font-semibold text-white">
+              Create New {config.label}
+            </h3>
+            <p className="text-xs text-gray-400 mt-1">
+              Add a new {config.label.toLowerCase()} to track in your project.
+            </p>
+          </div>
         </div>
-        <p className="text-sm text-gray-400">
-          Add a new {config.label.toLowerCase()} to track in your project.
-        </p>
       </div>
 
       {/* Form Content */}
-      <div className="flex-1 flex flex-col overflow-hidden px-6 py-4 space-y-4">
+      <div className="flex-1 flex flex-col overflow-hidden px-6 py-5 space-y-4">
         <div className="space-y-2">
           <label htmlFor="title" className="text-sm font-medium text-gray-300">
             Title <span className="text-red-400">*</span>
@@ -140,7 +142,7 @@ export default function PactCreationForm({ pactType, projectId, onSuccess, onCan
             value={head}
             onChange={(e) => setHead(e.target.value)}
             disabled={isLoading}
-            className="bg-black/40 text-white text-lg font-medium"
+            className="bg-gray-900/50 text-white text-base font-medium border-gray-700 focus:border-gray-600 transition-colors"
             autoFocus
           />
         </div>
@@ -149,37 +151,38 @@ export default function PactCreationForm({ pactType, projectId, onSuccess, onCan
           <label className="text-sm font-medium text-gray-300">
             Description
           </label>
-          <div className="flex-1 dark bg-black/40 rounded-md border border-gray-700/50 overflow-hidden">
+          <div className="flex-1 bg-gray-900/50 rounded-lg border border-gray-700 overflow-hidden hover:border-gray-600 transition-colors focus-within:border-gray-500">
             <RichTextEditor
               placeholder="Add detailed description..."
-              editorClassName="prose prose-stone dark:prose-invert max-w-none focus:outline-none px-6 py-4 w-full flex-1 min-h-[200px]"
-              containerClassName="h-full overflow-auto"
+              editorClassName="prose prose-stone dark:prose-invert max-w-none focus:outline-none px-5 py-4 w-full flex-1 min-h-[180px] text-gray-300"
+              containerClassName="h-full overflow-y-auto scrollbar-thin"
               onEditorReady={setEditor}
             />
           </div>
         </div>
 
         {error && (
-          <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-md p-3">
+          <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
             {error}
           </div>
         )}
       </div>
 
       {/* Footer */}
-      <div className="px-6 py-4 border-t border-gray-700/50 flex justify-end gap-2">
+      <div className="px-6 py-4 border-t border-gray-800 flex justify-end gap-2 flex-shrink-0">
         <Button
           type="button"
           variant="outline"
           onClick={handleCancel}
           disabled={isLoading}
+          className="text-gray-300 border-gray-700 hover:bg-gray-900"
         >
           Cancel
         </Button>
         <Button
           type="submit"
           disabled={isLoading || !head.trim()}
-          className={config.bgColor}
+          className="bg-white text-black hover:bg-gray-200 disabled:bg-gray-600 disabled:cursor-not-allowed"
         >
           {isLoading ? (
             <>

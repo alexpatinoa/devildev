@@ -37,41 +37,55 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
     <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-600 hover:scrollbar-thumb-gray-500">
       {/* Empty State - Show 3 Buttons */}
       {showEmptyState && (
-        <div className="flex items-center justify-center h-full">
+        <div className="flex items-center justify-center h-full ">
           <div className="w-80 aspect-square">
             {/* Top Row - Bug and Tasks buttons (square) */}
             <div className="flex gap-4 mb-4">
               <button
                 onClick={() => onOpenTab?.('bug')}
-                className="flex-1 aspect-square cursor-pointer bg-gradient-to-br from-red-500/10 to-red-600/5 border border-red-500/30 rounded-2xl hover:border-red-400/50 hover:bg-gradient-to-br hover:from-red-500/20 hover:to-red-600/10 transition-all duration-300 group flex flex-col items-center justify-center gap-3"
+                className="flex-1 aspect-square gap-2.5 cursor-pointer bg-gradient-to-br from-slate-800/40 to-slate-900/40 border border-slate-700/50 rounded-2xl hover:border-slate-600/70 hover:bg-gradient-to-br hover:from-slate-800/60 hover:to-slate-900/60 transition-all duration-300 group flex flex-col justify-start p-5"
               >
-                <div className="p-4 bg-red-500/10 rounded-xl group-hover:bg-red-500/20 transition-colors duration-300">
-                  <Bug className="w-8 h-8 text-red-400" />
+                <div className="flex items-start gap-1.5">
+                  <div className="p-1 bg-slate-700/50 rounded-sm group-hover:bg-slate-700/70 transition-colors duration-300 flex-shrink-0">
+                    <Bug className="w-3 h-3 text-slate-300" />
+                  </div>
+                  <span className="text-white font-semibold text-sm">Bug</span>
                 </div>
-                <span className="text-white font-semibold text-lg">Bug</span>
+                <p className="text-slate-400 text-xs text-left leading-relaxed">Report and track bugs with detailed context and reproduction steps.</p>
               </button>
 
               <button
                 onClick={() => onOpenTab?.('tasks')}
-                className="flex-1 aspect-square cursor-pointer bg-gradient-to-br from-blue-500/10 to-blue-600/5 border border-blue-500/30 rounded-2xl hover:border-blue-400/50 hover:bg-gradient-to-br hover:from-blue-500/20 hover:to-blue-600/10 transition-all duration-300 group flex flex-col items-center justify-center gap-3"
+                className="flex-1 aspect-square gap-2 cursor-pointer bg-gradient-to-br from-slate-800/40 to-slate-900/40 border border-slate-700/50 rounded-2xl hover:border-slate-600/70 hover:bg-gradient-to-br hover:from-slate-800/60 hover:to-slate-900/60 transition-all duration-300 group flex flex-col justify-start p-5"
               >
-                <div className="p-4 bg-blue-500/10 rounded-xl group-hover:bg-blue-500/20 transition-colors duration-300">
-                  <ListTodo className="w-8 h-8 text-blue-400" />
+                <div className="flex items-start gap-1.5">
+                  <div className="p-1 bg-slate-700/50 rounded-sm group-hover:bg-slate-700/70 transition-colors duration-300 flex-shrink-0">
+                    <ListTodo className="w-3 h-3 text-slate-300" />
+                  </div>
+                  <span className="text-white font-semibold text-sm">Tasks</span>
                 </div>
-                <span className="text-white font-semibold text-lg">Tasks</span>
+                <p className="text-slate-400 text-xs text-left leading-relaxed">Create and manage development tasks with clear priorities and progress tracking.</p>
               </button>
             </div>
 
             {/* Bottom Row - Features button (rectangle) */}
             <button
               onClick={() => onOpenTab?.('features')}
-              className="w-full h-[calc(50%-0.5rem)] cursor-pointer bg-gradient-to-br from-purple-500/10 to-purple-600/5 border border-purple-500/30 rounded-2xl hover:border-purple-400/50 hover:bg-gradient-to-br hover:from-purple-500/20 hover:to-purple-600/10 transition-all duration-300 group flex items-center justify-center gap-4"
+              className="w-full h-[calc(50%-0.5rem)] gap-2.5 cursor-pointer bg-gradient-to-br from-slate-800/40 to-slate-900/40 border border-slate-700/50 rounded-2xl hover:border-slate-600/70 hover:bg-gradient-to-br hover:from-slate-800/60 hover:to-slate-900/60 transition-all duration-300 group flex flex-col justify-start p-5"
             >
-              <div className="p-4 bg-purple-500/10 rounded-xl group-hover:bg-purple-500/20 transition-colors duration-300">
-                <Sparkles className="w-8 h-8 text-purple-400" />
+              <div className="flex items-start gap-1.5">
+                <div className="p-1 bg-slate-700/50 rounded-sm group-hover:bg-slate-700/70 transition-colors duration-300 flex-shrink-0">
+                  <Sparkles className="w-3 h-3 text-slate-300" />
+                </div>
+                <span className="text-white font-semibold text-sm">Features</span>
               </div>
-              <span className="text-white font-semibold text-lg">Features</span>
+              <p className="text-slate-400 text-xs text-left leading-relaxed">Plan and implement new features with comprehensive specifications and requirements. Plan and implement new features with comprehensive</p>
             </button>
+
+            {/* Info message */}
+            <p className="text-slate-500 text-xs text-center mt-6 leading-relaxed">
+              Any Pact (Bug/Task/Feature) created will be automatically updated as you commit to GitHub
+            </p>
           </div>
         </div>
       )}
