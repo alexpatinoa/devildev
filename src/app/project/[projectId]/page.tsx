@@ -9,7 +9,7 @@ import { getProject, updateProjectComponentPositions, ProjectMessage, projectCha
 import { SignOutButton, useUser } from '@clerk/nextjs';
 import { ChatMessageList, ChatInput } from '@/components/Project';
 import { getPactsByProject, Pact, PactType } from "../../../../actions/project/pacts";
-import PactDialog from '@/components/Project/PactDialog';
+import PactCreationForm from '@/components/Project/PactCreationForm';
 import PactList from '@/components/Project/PactList';
 import { triggerReverseArchitectureGeneration, checkProjectArchitectureByGenerationId, checkPendingArchitectureUpdate, triggerPendingArchitectureRegeneration } from '../../../../actions/reverse-architecture';
 import RevArchitecture from '@/components/core/revArchitecture';
@@ -133,8 +133,8 @@ const ProjectPage = () => {
     FEATURE: [],
     isLoaded: false
   });
-  const [isPactDialogOpen, setIsPactDialogOpen] = useState(false);
-  const [currentPactType, setCurrentPactType] = useState<PactType>('BUG');
+  const [isCreatingPact, setIsCreatingPact] = useState(false);
+  const [creatingPactType, setCreatingPactType] = useState<PactType>('BUG');
   const [projectPlan, setProjectPlan] = useState<string>("Not Generated");
   const [projectPhases, setProjectPhases] = useState<string[]>(["Not Generated 1", "Not Generated 2"]); 
   const [isCharacterLimitReached, setIsCharacterLimitReached] = useState(false);
@@ -469,19 +469,20 @@ const ProjectPage = () => {
     }
   };
 
-  // Handler to open pact dialog
+  // Handler to open pact creation form
   const handleOpenPactDialog = (tabType: 'bug' | 'tasks' | 'features') => {
     const typeMap: Record<string, PactType> = {
       bug: 'BUG',
       tasks: 'TASK',
       features: 'FEATURE'
     };
-    setCurrentPactType(typeMap[tabType]);
-    setIsPactDialogOpen(true);
+    setCreatingPactType(typeMap[tabType]);
+    setIsCreatingPact(true);
   };
 
   // Handler for successful pact creation
   const handlePactCreated = async (createdPactType: PactType) => {
+    setIsCreatingPact(false); // Close form
     // Refetch only the affected pact type using indexed query
     const result = await getPactsByProject(projectId, createdPactType);
     
@@ -2091,59 +2092,92 @@ const ProjectPage = () => {
 
             {/* Bug Tab */}
             <div className={`h-full ${activeTab === 'bug' ? 'flex' : 'hidden'} flex-col`}>
-              <div className="flex items-center justify-between p-4 border-b border-gray-700/50">
-                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                  <Bug className="w-5 h-5 text-red-400" />
-                  Bug Tracking
-                </h3>
-                <Button
-                  onClick={() => handleOpenPactDialog('bug')}
-                  className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30"
-                  size="sm"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Bug
-                </Button>
-              </div>
-              <PactList pacts={pactsCache.BUG} pactType="BUG" />
+              {!isCreatingPact || creatingPactType !== 'BUG' ? (
+                <>
+                  <div className="flex items-center justify-between p-4 border-b border-gray-700/50">
+                    <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                      <Bug className="w-5 h-5 text-red-400" />
+                      Bug Tracking
+                    </h3>
+                    <Button
+                      onClick={() => handleOpenPactDialog('bug')}
+                      className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30"
+                      size="sm"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Bug
+                    </Button>
+                  </div>
+                  <PactList pacts={pactsCache.BUG} pactType="BUG" />
+                </>
+              ) : (
+                <PactCreationForm
+                  pactType="BUG"
+                  projectId={projectId}
+                  onSuccess={handlePactCreated}
+                  onCancel={() => setIsCreatingPact(false)}
+                />
+              )}
             </div>
 
             {/* Tasks Tab */}
             <div className={`h-full ${activeTab === 'tasks' ? 'flex' : 'hidden'} flex-col`}>
-              <div className="flex items-center justify-between p-4 border-b border-gray-700/50">
-                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                  <ListTodo className="w-5 h-5 text-blue-400" />
-                  Task Management
-                </h3>
-                <Button
-                  onClick={() => handleOpenPactDialog('tasks')}
-                  className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30"
-                  size="sm"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Task
-                </Button>
-              </div>
-              <PactList pacts={pactsCache.TASK} pactType="TASK" />
+              {!isCreatingPact || creatingPactType !== 'TASK' ? (
+                <>
+                  <div className="flex items-center justify-between p-4 border-b border-gray-700/50">
+                    <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                      <ListTodo className="w-5 h-5 text-blue-400" />
+                      Task Management
+                    </h3>
+                    <Button
+                      onClick={() => handleOpenPactDialog('tasks')}
+                      className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                      size="sm"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Task
+                    </Button>
+                  </div>
+                  <PactList pacts={pactsCache.TASK} pactType="TASK" />
+                </>
+              ) : (
+                <PactCreationForm
+                  pactType="TASK"
+                  projectId={projectId}
+                  onSuccess={handlePactCreated}
+                  onCancel={() => setIsCreatingPact(false)}
+                />
+              )}
             </div>
 
             {/* Features Tab */}
             <div className={`h-full ${activeTab === 'features' ? 'flex' : 'hidden'} flex-col`}>
-              <div className="flex items-center justify-between p-4 border-b border-gray-700/50">
-                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-purple-400" />
-                  Feature Requests
-                </h3>
-                <Button
-                  onClick={() => handleOpenPactDialog('features')}
-                  className="bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30"
-                  size="sm"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Feature
-                </Button>
-              </div>
-              <PactList pacts={pactsCache.FEATURE} pactType="FEATURE" />
+              {!isCreatingPact || creatingPactType !== 'FEATURE' ? (
+                <>
+                  <div className="flex items-center justify-between p-4 border-b border-gray-700/50">
+                    <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-purple-400" />
+                      Feature Requests
+                    </h3>
+                    <Button
+                      onClick={() => handleOpenPactDialog('features')}
+                      className="bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30"
+                      size="sm"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Feature
+                    </Button>
+                  </div>
+                  <PactList pacts={pactsCache.FEATURE} pactType="FEATURE" />
+                </>
+              ) : (
+                <PactCreationForm
+                  pactType="FEATURE"
+                  projectId={projectId}
+                  onSuccess={handlePactCreated}
+                  onCancel={() => setIsCreatingPact(false)}
+                />
+              )}
             </div>
           </div>
         </div>
@@ -2358,14 +2392,6 @@ const ProjectPage = () => {
         description="You've reached the maximum token limit for this chat. Upgrade to Pro to unlock extended token limits and continue your conversation."
       />
 
-      {/* Pact Creation Dialog */}
-      <PactDialog
-        open={isPactDialogOpen}
-        onOpenChange={setIsPactDialogOpen}
-        pactType={currentPactType}
-        projectId={projectId}
-        onSuccess={handlePactCreated}
-      />
     </div>
   );
 };
