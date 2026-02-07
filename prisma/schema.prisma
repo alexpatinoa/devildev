@@ -198,7 +198,7 @@ model Pact {
   type        PactType
   status      PactStatus @default(PENDING)
   head        String
-  body        String?    @db.Text
+  body        Json?
   githubIssue Json?
   
   createdAt   DateTime   @default(now())

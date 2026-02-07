@@ -12,7 +12,7 @@ export interface Pact {
   type: PactType;
   status: PactStatus;
   head: string;
-  body: string | null;
+  body: any;
   githubIssue: any;
   createdAt: Date;
   updatedAt: Date;
@@ -25,7 +25,7 @@ export async function createPact(
   projectId: string,
   type: PactType,
   head: string,
-  body?: string
+  body?: any
 ) {
   const { userId } = await auth();
   if (!userId) {

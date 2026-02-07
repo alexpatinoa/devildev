@@ -4,6 +4,22 @@ import React, { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { ChevronDown, ChevronRight, Bug, ListTodo, Sparkles } from 'lucide-react';
 import { Pact, PactType } from '../../../actions/project/pacts';
+import { EditorContent, useEditor, EditorContext } from "@tiptap/react";
+import { StarterKit } from "@tiptap/starter-kit";
+import { TaskList, TaskItem } from "@tiptap/extension-list";
+import { Color, TextStyle } from "@tiptap/extension-text-style";
+import { Placeholder, Selection } from "@tiptap/extensions";
+import { Typography } from "@tiptap/extension-typography";
+import { Highlight } from "@tiptap/extension-highlight";
+import { Superscript } from "@tiptap/extension-superscript";
+import { Subscript } from "@tiptap/extension-subscript";
+import { TextAlign } from "@tiptap/extension-text-align";
+import { Mathematics } from "@tiptap/extension-mathematics";
+import { UniqueID } from "@tiptap/extension-unique-id";
+import { UiState } from "@/components/tiptap/tiptap-extension/ui-state-extension";
+import { Image } from "@/components/tiptap/tiptap-node/image-node/image-node-extension";
+import { NodeBackground } from "@/components/tiptap/tiptap-extension/node-background-extension";
+import { NodeAlignment } from "@/components/tiptap/tiptap-extension/node-alignment-extension";
 
 interface PactListProps {
   pacts: Pact[];
@@ -55,6 +71,62 @@ const statusConfig = {
   }
 };
 
+function PactBodyRenderer({ body }: { body: any }) {
+  const editor = useEditor({
+    immediatelyRender: false,
+    editable: false,
+    content: body || '',
+    editorProps: {
+      attributes: {
+        class: "prose prose-stone dark:prose-invert prose-sm max-w-none focus:outline-none text-gray-300",
+      },
+    },
+    extensions: [
+      StarterKit.configure({
+        horizontalRule: false,
+        dropcursor: false,
+        link: { openOnClick: false },
+      }),
+      TextAlign.configure({ types: ["heading", "paragraph"] }),
+      NodeBackground,
+      NodeAlignment,
+      TextStyle,
+      Mathematics,
+      Superscript,
+      Subscript,
+      Color,
+      TaskList,
+      TaskItem.configure({ nested: true }),
+      Highlight.configure({ multicolor: true }),
+      Selection,
+      Image,
+      UniqueID.configure({
+        types: [
+          "paragraph",
+          "bulletList",
+          "orderedList",
+          "taskList",
+          "heading",
+          "blockquote",
+          "codeBlock",
+        ],
+      }),
+      Typography,
+      UiState,
+    ],
+  });
+
+  if (!body || !editor) {
+    return null;
+  }
+
+  return (
+    <EditorContext.Provider value={{ editor }}>
+      <EditorContent editor={editor} className="text-gray-300" />
+    </EditorContext.Provider>
+  );
+}
+
 export default function PactList({ pacts, pactType }: PactListProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
@@ -71,6 +143,22 @@ export default function PactList({ pacts, pactType }: PactListProps) {
       }
       return newSet;
     });
+  };
+
+  const hasBody = (body: any) => {
+    if (!body) return false;
+    
+    // Check if there's actual content in the JSON
+    const hasContent = body.content && body.content.length > 0;
+    if (!hasContent) return false;
+    
+    // Check if all content is empty
+    const allEmpty = body.content.every((node: any) => {
+      if (!node.content || node.content.length === 0) return true;
+      return node.content.every((textNode: any) => !textNode.text || textNode.text.trim() === '');
+    });
+    
+    return !allEmpty;
   };
 
   if (pacts.length === 0) {
@@ -93,7 +181,7 @@ export default function PactList({ pacts, pactType }: PactListProps) {
     <div className="h-full overflow-y-auto p-6 space-y-3">
       {pacts.map((pact) => {
         const isExpanded = expandedIds.has(pact.id);
-        const hasBody = pact.body && pact.body.trim().length > 0;
+        const pactHasBody = hasBody(pact.body);
 
         return (
           <div
@@ -101,11 +189,11 @@ export default function PactList({ pacts, pactType }: PactListProps) {
             className={`border ${config.borderColor} ${config.bgColor} rounded-lg overflow-hidden transition-all`}
           >
             <div
-              className={`p-4 cursor-pointer ${hasBody ? config.hoverBg : ''} transition-colors`}
-              onClick={() => hasBody && toggleExpand(pact.id)}
+              className={`p-4 cursor-pointer ${pactHasBody ? config.hoverBg : ''} transition-colors`}
+              onClick={() => pactHasBody && toggleExpand(pact.id)}
             >
               <div className="flex items-start gap-3">
-                {hasBody && (
+                {pactHasBody && (
                   <div className="pt-1">
                     {isExpanded ? (
                       <ChevronDown className="w-4 h-4 text-gray-400" />
@@ -134,13 +222,9 @@ export default function PactList({ pacts, pactType }: PactListProps) {
                 </div>
               </div>
 
-              {isExpanded && hasBody && (
+              {isExpanded && pactHasBody && (
                 <div className="mt-4 pt-4 border-t border-gray-700/50">
-                  <div className="prose prose-invert prose-sm max-w-none">
-                    <div className="text-gray-300 whitespace-pre-wrap break-words">
-                      {pact.body}
-                    </div>
-                  </div>
+                  <PactBodyRenderer body={pact.body} />
                 </div>
               )}
             </div>
