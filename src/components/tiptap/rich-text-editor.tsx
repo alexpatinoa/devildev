@@ -49,7 +49,7 @@ function RichTextEditorContent() {
 
 export function RichTextEditor({
   placeholder = "Start writing...",
-  editorClassName = "prose prose-stone dark:prose-invert max-w-none focus:outline-none px-6 py-4 w-full flex-1",
+  editorClassName = "prose prose-stone dark:prose-invert max-w-none focus:outline-none pl-14 pr-5 py-4 w-full flex-1",
   containerClassName = "h-full overflow-auto",
   onEditorReady
 }: RichTextEditorProps) {

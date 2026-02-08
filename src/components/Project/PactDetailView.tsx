@@ -484,10 +484,10 @@ export default function PactDetailView({ pact, pactType, onBack, onUpdate, onDel
 
       {/* Body Content */}
       {isEditing ? (
-        <div className="flex-1 overflow-hidden px-6 py-4">
+        <div className="flex-1 overflow-clip px-6 py-4">
           <RichTextEditor
             placeholder="Add detailed description..."
-            editorClassName="prose prose-stone dark:prose-invert max-w-none focus:outline-none w-full flex-1 text-gray-300"
+            editorClassName="prose prose-stone dark:prose-invert max-w-none focus:outline-none pl-14 pr-5 py-4 w-full flex-1 text-gray-300"
             containerClassName="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent hover:scrollbar-thumb-gray-600"
             onEditorReady={(ed) => {
               setEditor(ed);
