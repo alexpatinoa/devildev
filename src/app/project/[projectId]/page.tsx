@@ -496,6 +496,40 @@ const ProjectPage = () => {
     }
   };
 
+  // Handler for successful pact update
+  const handlePactUpdated = async (updatedPactType: PactType) => {
+    // Refetch only the affected pact type
+    const result = await getPactsByProject(projectId, updatedPactType);
+    
+    if (result.success && result.pacts) {
+      setPactsCache(prev => ({
+        ...prev,
+        [updatedPactType]: result.pacts as Pact[]
+      }));
+      
+      // Update selectedPact if it's still selected
+      if (selectedPact) {
+        const updatedPact = (result.pacts as Pact[]).find(p => p.id === selectedPact.id);
+        if (updatedPact) {
+          setSelectedPact(updatedPact);
+        }
+      }
+    }
+  };
+
+  // Handler for successful pact deletion
+  const handlePactDeleted = async (deletedPactType: PactType) => {
+    setSelectedPact(null);
+    // Refetch the affected pact type to update cache
+    const result = await getPactsByProject(projectId, deletedPactType);
+    if (result.success && result.pacts) {
+      setPactsCache(prev => ({
+        ...prev,
+        [deletedPactType]: result.pacts as Pact[]
+      }));
+    }
+  };
+
   // Drag and drop handlers for dynamic tabs
   const handleDragStart = (e: React.DragEvent, tabId: string) => {
     setDraggedTab(tabId);
@@ -2096,7 +2130,13 @@ const ProjectPage = () => {
             <div className={`h-full ${activeTab === 'bug' ? 'flex' : 'hidden'} flex-col`}>
               {selectedPact && selectedPact.type === 'BUG' ? (
                 // Detail view
-                <PactDetailView pact={selectedPact} pactType="BUG" onBack={() => setSelectedPact(null)} />
+                <PactDetailView
+                  pact={selectedPact}
+                  pactType="BUG"
+                  onBack={() => setSelectedPact(null)}
+                  onUpdate={() => handlePactUpdated('BUG')}
+                  onDelete={() => handlePactDeleted('BUG')}
+                />
               ) : !isCreatingPact || creatingPactType !== 'BUG' ? (
                 <>
                   <div className="flex items-center justify-between p-4 border-b border-gray-700/50">
@@ -2129,7 +2169,13 @@ const ProjectPage = () => {
             <div className={`h-full ${activeTab === 'tasks' ? 'flex' : 'hidden'} flex-col`}>
               {selectedPact && selectedPact.type === 'TASK' ? (
                 // Detail view
-                <PactDetailView pact={selectedPact} pactType="TASK" onBack={() => setSelectedPact(null)} />
+                <PactDetailView
+                  pact={selectedPact}
+                  pactType="TASK"
+                  onBack={() => setSelectedPact(null)}
+                  onUpdate={() => handlePactUpdated('TASK')}
+                  onDelete={() => handlePactDeleted('TASK')}
+                />
               ) : !isCreatingPact || creatingPactType !== 'TASK' ? (
                 <>
                   <div className="flex items-center justify-between p-4 border-b border-gray-700/50">
@@ -2162,7 +2208,13 @@ const ProjectPage = () => {
             <div className={`h-full ${activeTab === 'features' ? 'flex' : 'hidden'} flex-col`}>
               {selectedPact && selectedPact.type === 'FEATURE' ? (
                 // Detail view
-                <PactDetailView pact={selectedPact} pactType="FEATURE" onBack={() => setSelectedPact(null)} />
+                <PactDetailView
+                  pact={selectedPact}
+                  pactType="FEATURE"
+                  onBack={() => setSelectedPact(null)}
+                  onUpdate={() => handlePactUpdated('FEATURE')}
+                  onDelete={() => handlePactDeleted('FEATURE')}
+                />
               ) : !isCreatingPact || creatingPactType !== 'FEATURE' ? (
                 <>
                   <div className="flex items-center justify-between p-4 border-b border-gray-700/50">

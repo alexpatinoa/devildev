@@ -18,9 +18,6 @@ export interface Pact {
   updatedAt: Date;
 }
 
-/**
- * Create a new pact for a project
- */
 export async function createPact(
   projectId: string,
   type: PactType,
@@ -60,9 +57,109 @@ export async function createPact(
   }
 }
 
+export async function updatePact(
+  pactId: string,
+  head: string,
+  body?: any
+) {
+  const { userId } = await auth();
+  if (!userId) {
+    return { error: 'Unauthorized' };
+  }
+
+  // Verify the pact belongs to user's project
+  const pact = await db.pact.findUnique({
+    where: { id: pactId },
+    include: { project: { select: { userId: true } } }
+  });
+
+  if (!pact || pact.project.userId !== userId) {
+    return { error: 'Pact not found or unauthorized' };
+  }
+
+  try {
+    const updatedPact = await db.pact.update({
+      where: { id: pactId },
+      data: {
+        head,
+        body: body || null,
+        updatedAt: new Date()
+      }
+    });
+
+    return { success: true, pact: updatedPact };
+  } catch (error) {
+    console.error('Error updating pact:', error);
+    return { error: 'Failed to update pact' };
+  }
+}
+
 /**
- * Get pacts for a project, optionally filtered by type
+ * Update pact status
  */
+export async function updatePactStatus(
+  pactId: string,
+  status: PactStatus
+) {
+  const { userId } = await auth();
+  if (!userId) {
+    return { error: 'Unauthorized' };
+  }
+
+  // Verify the pact belongs to user's project
+  const pact = await db.pact.findUnique({
+    where: { id: pactId },
+    include: { project: { select: { userId: true } } }
+  });
+
+  if (!pact || pact.project.userId !== userId) {
+    return { error: 'Pact not found or unauthorized' };
+  }
+
+  try {
+    const updatedPact = await db.pact.update({
+      where: { id: pactId },
+      data: {
+        status,
+        updatedAt: new Date()
+      }
+    });
+
+    return { success: true, pact: updatedPact };
+  } catch (error) {
+    console.error('Error updating pact status:', error);
+    return { error: 'Failed to update pact status' };
+  }
+}
+
+
+export async function deletePact(pactId: string) {
+  const { userId } = await auth();
+  if (!userId) {
+    return { error: 'Unauthorized' };
+  }
+
+  const pact = await db.pact.findUnique({
+    where: { id: pactId },
+    include: { project: { select: { userId: true } } }
+  });
+
+  if (!pact || pact.project.userId !== userId) {
+    return { error: 'Pact not found or unauthorized' };
+  }
+
+  try {
+    await db.pact.delete({
+      where: { id: pactId }
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting pact:', error);
+    return { error: 'Failed to delete pact' };
+  }
+}
+
 export const getPactsByProject = cache(async (projectId: string, type?: PactType) => {
   const { userId } = await auth();
   if (!userId) {

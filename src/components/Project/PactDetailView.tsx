@@ -1,15 +1,15 @@
 "use client";
 
-import React, { useState } from 'react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { ChevronLeft, MoreHorizontal, Bug, ListTodo, Sparkles, Trash2, Edit } from 'lucide-react';
-import { Pact, PactType } from '../../../actions/project/pacts';
-import { EditorContent, useEditor, EditorContext } from "@tiptap/react";
+import React, { useState, useEffect } from 'react';
+import { Input } from '@/components/ui/input';
+import { ChevronLeft, Bug, ListTodo, Sparkles, Trash2, Edit, ChevronDown, Maximize, Minimize, Loader2, Save, X } from 'lucide-react';
+import { Pact, PactType, updatePact, updatePactStatus, deletePact, PactStatus } from '../../../actions/project/pacts';
+import { Editor, EditorContent, useEditor, EditorContext } from "@tiptap/react";
+import { RichTextEditor } from '@/components/tiptap/rich-text-editor';
 import { StarterKit } from "@tiptap/starter-kit";
 import { TaskList, TaskItem } from "@tiptap/extension-list";
 import { Color, TextStyle } from "@tiptap/extension-text-style";
-import { Placeholder, Selection } from "@tiptap/extensions";
+import { Selection } from "@tiptap/extensions";
 import { Typography } from "@tiptap/extension-typography";
 import { Highlight } from "@tiptap/extension-highlight";
 import { Superscript } from "@tiptap/extension-superscript";
@@ -26,6 +26,8 @@ interface PactDetailViewProps {
   pact: Pact;
   pactType: PactType;
   onBack: () => void;
+  onUpdate?: () => void;
+  onDelete?: () => void;
 }
 
 const pactConfig = {
@@ -126,10 +128,29 @@ function PactBodyRenderer({ body }: { body: any }) {
   );
 }
 
-export default function PactDetailView({ pact, pactType, onBack }: PactDetailViewProps) {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+export default function PactDetailView({ pact, pactType, onBack, onUpdate, onDelete }: PactDetailViewProps) {
+  const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedHead, setEditedHead] = useState(pact.head);
+  const [currentHead, setCurrentHead] = useState(pact.head);
+  const [currentBody, setCurrentBody] = useState(pact.body);
+  const [currentStatus, setCurrentStatus] = useState<PactStatus>(pact.status);
+  const [editor, setEditor] = useState<Editor | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [error, setError] = useState('');
   const config = pactConfig[pactType as keyof typeof pactConfig];
   const Icon = config.icon;
+
+  // Sync local state when pact prop changes (from parent refetch)
+  useEffect(() => {
+    setCurrentHead(pact.head);
+    setCurrentBody(pact.body);
+    setCurrentStatus(pact.status);
+  }, [pact.head, pact.body, pact.status]);
 
   const hasBody = (body: any) => {
     if (!body) return false;
@@ -153,96 +174,340 @@ export default function PactDetailView({ pact, pactType, onBack }: PactDetailVie
     return hasTextContent(body);
   };
 
+  const handleEditClick = () => {
+    setIsEditing(true);
+    setEditedHead(currentHead);
+    setError('');
+  };
+
+  const handleSave = async () => {
+    if (!editedHead.trim()) {
+      setError('Title is required');
+      return;
+    }
+
+    if (!editor) {
+      setError('Editor not initialized');
+      return;
+    }
+
+    setIsSaving(true);
+    setError('');
+
+    try {
+      const bodyJson = editor.getJSON();
+      const serializedBody = JSON.parse(JSON.stringify(bodyJson));
+      
+      // Update local display state BEFORE making the API call
+      // This ensures the new values are ready when we exit edit mode
+      setCurrentHead(editedHead.trim());
+      setCurrentBody(serializedBody);
+      
+      const result = await updatePact(pact.id, editedHead.trim(), serializedBody);
+      
+      if (result.error) {
+        setError(result.error);
+        setIsSaving(false);
+        // Revert on error
+        setCurrentHead(pact.head);
+        setCurrentBody(pact.body);
+        return;
+      }
+
+      // Success - exit edit mode
+      setIsSaving(false);
+      setIsEditing(false);
+      
+      // Trigger parent refresh if callback provided
+      if (onUpdate) {
+        onUpdate();
+      }
+    } catch (err) {
+      setError('An unexpected error occurred');
+      setIsSaving(false);
+      // Revert on error
+      setCurrentHead(pact.head);
+      setCurrentBody(pact.body);
+    }
+  };
+
+  const handleCancel = () => {
+    setIsEditing(false);
+    setEditedHead(currentHead);
+    setError('');
+    if (editor) {
+      editor.commands.setContent(currentBody || '');
+    }
+  };
+
+  const handleStatusChange = async (newStatus: PactStatus) => {
+    setIsStatusDropdownOpen(false);
+    
+    if (newStatus === currentStatus) {
+      return; // No change
+    }
+
+    setIsUpdatingStatus(true);
+
+    try {
+      const result = await updatePactStatus(pact.id, newStatus);
+      
+      if (result.error) {
+        setError(result.error);
+        setIsUpdatingStatus(false);
+        return;
+      }
+
+      // Update local status immediately
+      setCurrentStatus(newStatus);
+      setIsUpdatingStatus(false);
+      
+      // Trigger parent refresh if callback provided
+      if (onUpdate) {
+        onUpdate();
+      }
+    } catch (err) {
+      setError('Failed to update status');
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+
+    setIsDeleting(true);
+    setError('');
+
+    try {
+      const result = await deletePact(pact.id);
+
+      if (result.error) {
+        setError(result.error);
+        setIsDeleting(false);
+        setConfirmDelete(false);
+        return;
+      }
+
+      if (onDelete) {
+        onDelete();
+      }
+    } catch (err) {
+      setError('Failed to delete pact');
+      setIsDeleting(false);
+      setConfirmDelete(false);
+    }
+  };
+
   return (
-    <div className="h-full flex flex-col bg-black border-l border-gray-800">
+    <div className={`flex flex-col bg-black ${isFullscreen ? 'fixed inset-0 z-50' : 'h-full border-l border-gray-800'}`}>
       {/* Header */}
-      <div className="px-6 py-4 border-b border-gray-800 flex-shrink-0">
-        <div className="flex items-start justify-between mb-4">
+      <div className="px-6 py-4 border-b border-gray-800 shrink-0">
+        <div className="flex items-center gap-4">
+          {/* Back Button */}
           <button
             onClick={onBack}
-            className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
+            disabled={isSaving}
+            className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800/50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             title="Back to list"
           >
             <ChevronLeft className="w-5 h-5" />
-            <span className="text-sm font-medium">Back</span>
           </button>
-          
-          <div className="relative">
-            <button
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800/50 rounded-lg transition-colors"
-              title="More actions"
-            >
-              <MoreHorizontal className="w-5 h-5" />
-            </button>
-            
-            {isMenuOpen && (
+
+          {/* Title with Icon */}
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <Icon className="w-5 h-5 text-gray-400 shrink-0" />
+            {isEditing ? (
+              <Input
+                value={editedHead}
+                onChange={(e) => setEditedHead(e.target.value)}
+                disabled={isSaving}
+                className="flex-1 bg-gray-900/50 text-white text-lg font-semibold border-gray-700 focus:border-gray-600 transition-colors"
+                placeholder="Enter title..."
+                autoFocus
+              />
+            ) : (
+              <h2 className="text-lg font-semibold text-white truncate">{currentHead}</h2>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-1">
+            {isEditing ? (
               <>
-                <div 
-                  className="fixed inset-0 z-30"
-                  onClick={() => setIsMenuOpen(false)}
-                />
-                <div className="absolute right-0 mt-2 w-48 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-40 overflow-hidden">
-                  <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
-                    <Edit className="w-4 h-4" />
-                    Edit
+                {/* Cancel Button */}
+                <button
+                  onClick={handleCancel}
+                  disabled={isSaving}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-gray-400 hover:text-white hover:bg-gray-800/50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Cancel"
+                >
+                  <X className="w-4 h-4" />
+                  <span className="text-sm">Cancel</span>
+                </button>
+
+                {/* Save Button */}
+                <button
+                  onClick={handleSave}
+                  disabled={isSaving || !editedHead.trim()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-black hover:bg-gray-200 rounded-lg transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed disabled:text-gray-400"
+                  title="Save"
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="text-sm">Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      <span className="text-sm">Save</span>
+                    </>
+                  )}
+                </button>
+              </>
+            ) : (
+              <>
+                {/* Status Dropdown */}
+                <div className="relative">
+                  <button
+                    onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
+                    disabled={isUpdatingStatus}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${statusConfig[currentStatus as keyof typeof statusConfig].color} disabled:opacity-50 disabled:cursor-not-allowed`}
+                    title="Change status"
+                  >
+                    {isUpdatingStatus ? (
+                      <>
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        <span>Updating...</span>
+                      </>
+                    ) : (
+                      <>
+                        {statusConfig[currentStatus as keyof typeof statusConfig].label}
+                        <ChevronDown className="w-3 h-3 opacity-60" />
+                      </>
+                    )}
                   </button>
-                  <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors">
-                    <Trash2 className="w-4 h-4" />
-                    Delete
-                  </button>
+
+                  {isStatusDropdownOpen && (
+                    <>
+                      <div 
+                        className="fixed inset-0 z-30"
+                        onClick={() => setIsStatusDropdownOpen(false)}
+                      />
+                      <div className="absolute right-0 mt-1.5 min-w-[140px] bg-zinc-900 border border-gray-700 rounded-md shadow-2xl z-40 overflow-hidden py-1">
+                        {Object.entries(statusConfig).map(([key, config]) => (
+                          <button
+                            key={key}
+                            onClick={() => handleStatusChange(key as PactStatus)}
+                            className={`w-full px-3 py-1.5 text-xs font-medium text-left transition-colors ${
+                              currentStatus === key 
+                                ? config.color
+                                : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200'
+                            }`}
+                          >
+                            {config.label}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </div>
+
+                {/* Vertical Divider */}
+                <div className="w-px h-6 bg-gray-700 mx-1" />
+
+                {/* Edit Button */}
+                <button
+                  onClick={handleEditClick}
+                  className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800/50 rounded-lg transition-colors"
+                  title="Edit"
+                >
+                  <Edit className="w-5 h-5" />
+                </button>
+
+                {/* Fullscreen Button */}
+                <button
+                  onClick={() => setIsFullscreen(!isFullscreen)}
+                  className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800/50 rounded-lg transition-colors"
+                  title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+                >
+                  {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
+                </button>
+
+                {/* Delete Button */}
+                {confirmDelete ? (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setConfirmDelete(false)}
+                      disabled={isDeleting}
+                      className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-gray-800/50 rounded transition-colors disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleDelete}
+                      disabled={isDeleting}
+                      className="flex items-center gap-1 px-2 py-1 text-xs text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 rounded transition-colors disabled:opacity-50"
+                    >
+                      {isDeleting ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-3 h-3" />
+                      )}
+                      {isDeleting ? 'Deleting...' : 'Confirm'}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleDelete}
+                    className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                    title="Delete"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                )}
               </>
             )}
           </div>
         </div>
-
-        {/* Title */}
-        <div className="flex items-start gap-3">
-          <Icon className="w-5 h-5 text-gray-400 flex-shrink-0 mt-1" />
-          <div className="flex-1 min-w-0">
-            <h2 className="text-xl font-semibold text-white break-words">{pact.head}</h2>
-          </div>
-        </div>
-
-        {/* Status Badge */}
-        <div className="mt-4 flex items-center gap-2">
-          <span className="text-xs text-gray-500">Status:</span>
-          <Badge className={statusConfig[pact.status as keyof typeof statusConfig].color}>
-            {statusConfig[pact.status as keyof typeof statusConfig].label}
-          </Badge>
-          <span className="text-xs text-gray-500 ml-auto">{new Date(pact.createdAt).toLocaleDateString()}</span>
-        </div>
-      </div>
-
-      {/* Body Content */}
-      <div className="flex-1 overflow-y-auto px-6 py-4">
-        {hasBody(pact.body) ? (
-          <PactBodyRenderer body={pact.body} />
-        ) : (
-          <div className="flex items-center justify-center h-full text-gray-500">
-            <p className="text-sm">No description provided</p>
+        
+        {/* Error Message */}
+        {error && (
+          <div className="mt-3 text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+            {error}
           </div>
         )}
       </div>
 
-      {/* Footer Actions */}
-      <div className="px-6 py-4 border-t border-gray-800 flex-shrink-0 flex gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          className="text-gray-300 hover:text-white"
-        >
-          Update Status
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="text-gray-300 hover:text-white"
-        >
-          Edit
-        </Button>
-      </div>
+      {/* Body Content */}
+      {isEditing ? (
+        <div className="flex-1 overflow-hidden px-6 py-4">
+          <RichTextEditor
+            placeholder="Add detailed description..."
+            editorClassName="prose prose-stone dark:prose-invert max-w-none focus:outline-none w-full flex-1 text-gray-300"
+            containerClassName="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent hover:scrollbar-thumb-gray-600"
+            onEditorReady={(ed) => {
+              setEditor(ed);
+              if (ed && currentBody) {
+                ed.commands.setContent(currentBody);
+              }
+            }}
+          />
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto px-6 py-4 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent hover:scrollbar-thumb-gray-600">
+          {hasBody(currentBody) ? (
+            <PactBodyRenderer body={currentBody} />
+          ) : (
+            <div className="flex items-center justify-center h-full text-gray-500">
+              <p className="text-sm">No description provided</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
