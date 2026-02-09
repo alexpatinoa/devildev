@@ -5,7 +5,7 @@ import { cache } from "react";
 import { ChatOpenAI } from "@langchain/openai";
 import { PromptTemplate } from "@langchain/core/prompts";
 import { StringOutputParser } from "@langchain/core/output_parsers";
-import { generateNthProjectPhase, generateProjectPlanDocs, initialDocsGenerationPrompt, ultraProjectChatBotPrompt } from "../prompts/ReverseArchitecture";
+import {  initialDocsGenerationPrompt, ultraProjectChatBotPrompt } from "../prompts/ReverseArchitecture";
 const openaiKey = process.env.OPENAI_API_KEY;
 const llm = new ChatOpenAI({
   openAIApiKey: openaiKey,
@@ -480,45 +480,6 @@ export async function initialDocsGeneration(userInput: string, projectFramework:
     return response;
 }
 
-// Create project context docs
-export async function createProjectContextDocs(
-    projectChatId: any,
-    contextName: string,
-    summarizedContext: string,
-    projectRules?: string,
-    humanReview?: string,
-    plan?: string,
-    phases?: any[],
-    phaseCount?: number
-) {
-    const { userId } = await auth();
-    if (!userId) {
-        return { error: 'Unauthorized' };
-    }
-
-    try {
-
-        // Create new project context docs
-        const projectContextDocs = await db.projectContextDocs.create({
-            data: {
-                projectChatId,
-                contextName,
-                summarizedContext,
-                projectRules,
-                humanReview, 
-                plan,
-                phases: phases as any,
-                phaseCount
-            }
-        });
-
-        return { success: true, projectContextDocs };
-    } catch (error) {
-        console.error("Error creating project context docs:", error);
-        return { error: 'Failed to create project context docs' };
-    }
-}
-
 // Get project context docs by ID
 export async function getProjectContextDocs(projectChatId: any) {
     
@@ -546,51 +507,6 @@ export async function getProjectContextDocs(projectChatId: any) {
     }
 } 
 
-export async function generateProjectPlan( framework: string, phaseCount: string, detailedAnalysis: string, requirement: string) {
-    const { userId } = await auth();
-    if (!userId) {
-        return { error: 'Unauthorized' };
-    }
-
-    const prompt = PromptTemplate.fromTemplate(generateProjectPlanDocs);
-    const chain = prompt.pipe(llm).pipe(new StringOutputParser());
-    const response = await chain.invoke({
-        framework: framework,
-        phaseCount: phaseCount,
-        projectAnalysis: detailedAnalysis,
-        requirement: requirement
-    });
-    return response;
-}
-
-export async function generateNthPhase(plan: string, framework: string, requirement: string, phaseNum: string) {
-    const { userId } = await auth();
-    if (!userId) {
-        return { error: 'Unauthorized' };
-    }
-
-    const prompt = PromptTemplate.fromTemplate(generateNthProjectPhase);
-    const chain = prompt.pipe(llm).pipe(new StringOutputParser());
-    const response = await chain.invoke({
-        plan: plan,
-        framework: framework,
-        requirement: requirement,
-        phaseNum: phaseNum
-    });
-    return response;
-}
-
-export async function updateProjectContextDocs(projectContextDocsId: string, plan: string, phases: any[]) {
-    const { userId } = await auth();
-    if (!userId) {
-        return { error: 'Unauthorized' };
-    }
-
-    await db.projectContextDocs.update({
-        where: {id: projectContextDocsId},
-        data: {plan: plan, phases: phases as any}
-    })
-}
 
 // System-level helper for Inngest to save the initial assistant message without requiring auth
 export async function saveInitialMessageForInngestRevArchitecture(

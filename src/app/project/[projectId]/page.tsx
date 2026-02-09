@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { useParams, useRouter } from "next/navigation";
 import { Maximize, X, Menu, MessageCircle, Plus, Loader2, MessageSquare, BrainCircuit, FolderKanban, ChevronDown, ChevronRight, Folder, FolderOpen, File, Bug, ListTodo, Sparkles, GripVertical } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { getProject, updateProjectComponentPositions, ProjectMessage, projectChatBot, createProjectContextDocs, generateProjectPlan, generateNthPhase, updateProjectContextDocs, createProjectChat, getProjectChat, addMessageToProjectChat } from "../../../../actions/project";
+import { getProject, updateProjectComponentPositions, ProjectMessage, projectChatBot, createProjectChat, getProjectChat, addMessageToProjectChat } from "../../../../actions/project";
 import { SignOutButton, useUser } from '@clerk/nextjs';
 import { ChatMessageList, ChatInput } from '@/components/Project';
 import PactDetailView from '@/components/Project/PactDetailView';
@@ -16,7 +16,6 @@ import { triggerReverseArchitectureGeneration, checkProjectArchitectureByGenerat
 import RevArchitecture from '@/components/core/revArchitecture';
 import ProjectContextDocs from '@/components/core/ProjectContextDocs';
 import { ProjectPageSkeleton } from '@/components/ui/project-skeleton';
-import { summarizeProjectDocsContext } from '../../../../actions/projectDocs';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { submitFeedback } from '../../../../actions/feedback';
@@ -116,7 +115,6 @@ const ProjectPage = () => {
     lastGeneratedCommitHash: string | null;
   } | null>(null);
   const [isRegeneratingFromPending, setIsRegeneratingFromPending] = useState(false);
-  const [isDocsGenerating, setIsDocsGenerating] = useState(false);
   const [isCreatingChat, setIsCreatingChat] = useState(false);
   const [selectedProjectDocsId, setSelectedProjectDocsId] = useState<string | undefined>(undefined);
   const [selectedDocsName, setSelectedDocsName] = useState<string | undefined>(undefined);
@@ -792,7 +790,7 @@ const ProjectPage = () => {
   // Handle creating new chat
   const handleCreateNewChat = async () => {
 
-    if(isChatLoading || isDocsGenerating || isArchitectureGenerating || messages.length === 0 || isLoadingUserSubscription) return;
+    if(isChatLoading || isArchitectureGenerating || messages.length === 0 || isLoadingUserSubscription) return;
     if (projectChats.length >= MAX_CHATS) {
       setShowMaxChatsDialog(true);
       return;
@@ -1144,9 +1142,6 @@ const ProjectPage = () => {
       setShowCharacterLimitDialog(true);
       return;
     } 
-
-    
-
     
     const userMessage: ProjectMessage = {
       id: generateMessageId(),
@@ -1198,6 +1193,10 @@ const ProjectPage = () => {
         ? JSON.parse(cleanedResponse) 
         : cleanedResponse; 
 
+
+        alert("PARSED")
+        console.log("PARSED RESPONSE: ", parsedResponse);
+
  
         
       // For now, just add a simple response
@@ -1211,78 +1210,6 @@ const ProjectPage = () => {
       // Add assistant message to local state
       setMessages(prevMessages => [...prevMessages, assistantMessage]);
       setIsChatLoading(false);
-
-      // DELETE THIS AFTER TESTING  
-      if(parsedResponse.docs && parsedResponse.wannaStart){
-        setIsDocsGenerating(true);   
-         // Here Docs generation logic 
-         const projectSummarizedContext = await summarizeProjectDocsContext(inputMessage.trim(), project.framework, messages, project.detailedAnalysis);
-         const parsedprojectSummarizedContext = typeof projectSummarizedContext === 'string' 
-          ? JSON.parse(projectSummarizedContext) 
-          : projectSummarizedContext;
-
-         try {
-           // Create project context docs in database with BigChanges content
-           const bigChangesContent = `# Development Agent Workflow\n\n## Primary Directive\nYou are a development agent implementing a project based on established documentation. Your goal is to build a cohesive, well-documented, and maintainable software product. **ALWAYS** consult documentation before taking any action and maintain strict consistency with project standards.\n\n[This is a truncated version of the BigChanges content for ${parsedprojectSummarizedContext.nameDocs}]`;
-              
-           const projectContextDocsResult = await createProjectContextDocs(
-             activeChatId,  
-             parsedprojectSummarizedContext.nameDocs,
-             parsedprojectSummarizedContext.exactRequirement,
-             bigChangesContent,
-             undefined, // human review 
-             undefined, // plan
-             undefined, // phases  
-             parsedprojectSummarizedContext.phaseCount
-           );
-           
-           if (projectContextDocsResult.success) {
-             // Update the assistant message with projectDocsId
-             const updatedAssistantMessage: ProjectMessage = {
-               ...assistantMessage,
-               projectDocsId: projectContextDocsResult.projectContextDocs.id,
-               docsName: parsedprojectSummarizedContext.nameDocs
-             };
-             
-             // Update the message in local state
-             setMessages(prevMessages => 
-               prevMessages.map(msg => 
-                 msg.id === assistantMessage.id ? updatedAssistantMessage : msg
-               )
-             );
-             
-             // Update the assistant message variable for database save
-             Object.assign(assistantMessage, updatedAssistantMessage);
-           }
-
-           if(!projectContextDocsResult.projectContextDocs){
-            console.error('Error creating project context docs:', projectContextDocsResult.error);
-            return;
-           }
-
- 
-           //Here generate plan  
-           const plan = await generateProjectPlan(project.framework, parsedprojectSummarizedContext.phaseCount, project.detailedAnalysis, parsedprojectSummarizedContext.exactRequirement);
-
-           setProjectPlan(plan.toString()); 
-
-           let projectPhases: string[] = [];
-           
-           for(let i = 0; i< parsedprojectSummarizedContext.phaseCount; i++){
-            const nthPhase = await generateNthPhase(JSON.stringify(plan), project.framework, parsedprojectSummarizedContext.exactRequirement, String(i+1));
-
-            projectPhases.push(nthPhase.toString());
-           }
-           setProjectPhases(projectPhases);
-           setIsDocsGenerating(false);
-           const updateDocsRes = await updateProjectContextDocs(projectContextDocsResult.projectContextDocs.id, projectPlan, projectPhases);
-           
-         } catch (error) {
-           console.error('Error creating project context docs:', error);
-         }
-         setIsDocsGenerating(false);
-         
-      }
       
       // Save assistant message to database
       await addMessageToProjectChat(projectId, activeChatId, assistantMessage);
@@ -1487,7 +1414,7 @@ const ProjectPage = () => {
                 onClick={handleCreateNewChat}
                 className="flex items-center space-x-4 px-3 py-3 rounded-lg text-gray-300 hover:text-white hover:bg-black/40 hover:border-red-500/30 border border-transparent transition-all duration-200 group/item w-full"
                 title="New Chat"
-                disabled={isChatLoading || isDocsGenerating || isArchitectureGenerating}
+                disabled={isChatLoading || isArchitectureGenerating}
               >
                 <Plus className="h-5 w-5 flex-shrink-0 group-hover/item:scale-105 transition-transform duration-200 text-red-400" />
                 <span className={`text-sm font-medium whitespace-nowrap transition-all duration-300 ${
@@ -1534,7 +1461,7 @@ const ProjectPage = () => {
                         : 'text-gray-300 hover:text-white hover:bg-black/40 border border-transparent'
                     }`}
                     title={chat.title}
-                    disabled={isChatLoading || isDocsGenerating || isArchitectureGenerating}
+                    disabled={isChatLoading || isArchitectureGenerating}
                   >
                     <MessageCircle className={`h-4 w-4 flex-shrink-0 transition-transform duration-200 ${
                       activeChatId === chat.id.toString() ? 'text-red-400' : 'text-gray-400 group-hover/chat:text-red-400'
@@ -1593,7 +1520,6 @@ const ProjectPage = () => {
             <ChatMessageList
               messages={messages}
               isChatLoading={isChatLoading}
-              isDocsGenerating={isDocsGenerating}
               userImageUrl={user?.imageUrl}
               userInitial={user?.firstName?.charAt(0) || user?.emailAddresses?.[0]?.emailAddress.charAt(0) || 'U'}
               copiedPrompts={copiedPrompts}
@@ -1820,7 +1746,6 @@ const ProjectPage = () => {
             <ChatMessageList
               messages={messages}
               isChatLoading={isChatLoading}
-              isDocsGenerating={isDocsGenerating}
               userImageUrl={user?.imageUrl}
               userInitial={user?.firstName?.charAt(0) || user?.emailAddresses?.[0]?.emailAddress.charAt(0) || 'U'}
               copiedPrompts={copiedPrompts}
