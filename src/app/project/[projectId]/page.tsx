@@ -1236,7 +1236,7 @@ const ProjectPage = () => {
         <div className="flex z-10 absolute w-full justify-center items-center">
         <div className="flex items-center space-x-3">
           <div className="hidden md:flex items-center space-x-2 px-3 py-1 bg-gray-800/50 rounded-lg border border-gray-700/50">
-          {project.framework === "react" ? <Image src="/react.png" alt="Project" width={25} height={25} /> : <Image src="/nextjs.png" alt="Project" width={25} height={25} />}
+          {project.framework === "react" ? <Image src="/react.png" alt="React framework" width={25} height={25} /> : <Image src="/nextjs.png" alt="Next.js framework" width={25} height={25} />}
             <span className="text-sm font-medium">{project.name}</span>
           </div>
         </div>
@@ -1446,7 +1446,7 @@ const ProjectPage = () => {
                       <div className="mr-3 flex-shrink-0">
                         <Image
                           src="/favicon.jpg"
-                          alt="Assistant"
+                          alt="DevilDev AI assistant"
                           width={32}
                           height={32}
                           className="rounded-full"
@@ -1456,7 +1456,7 @@ const ProjectPage = () => {
                     {message.type === 'user' && (
                       <div className="mr-1 flex-shrink-0">
                         <Avatar className="size-8">
-                          <AvatarImage src={user?.imageUrl} alt="User" />
+                          <AvatarImage src={user?.imageUrl} alt="User avatar" />
                           <AvatarFallback>U</AvatarFallback>
                         </Avatar>
                       </div>
@@ -1514,7 +1514,7 @@ const ProjectPage = () => {
                 <div className="flex justify-start items-center space-x-3 animate-pulse">
                   <Image
                     src="/favicon.jpg"
-                    alt="Assistant"
+                    alt="DevilDev AI assistant"
                     width={32}
                     height={32}
                     className="w-8 h-8 rounded-full"
@@ -1530,7 +1530,7 @@ const ProjectPage = () => {
                 <div className="flex justify-start items-center space-x-3 animate-pulse">
                   <Image
                     src="/favicon.jpg"
-                    alt="Assistant"
+                    alt="DevilDev AI assistant"
                     width={32}
                     height={32}
                     className="w-8 h-8 rounded-full"
@@ -1546,7 +1546,7 @@ const ProjectPage = () => {
                 <div className="flex justify-start items-center space-x-3 animate-pulse">
                   <Image
                     src="/favicon.jpg"
-                    alt="Assistant"
+                    alt="DevilDev AI assistant"
                     width={32}
                     height={32}
                     className="w-8 h-8 rounded-full"
@@ -1804,7 +1804,7 @@ const ProjectPage = () => {
                     <div className="mr-3 flex-shrink-0">
                       <Image
                         src="/favicon.jpg"
-                        alt="Assistant"
+                        alt="DevilDev AI assistant"
                         width={32}
                         height={32}
                         className="rounded-full"
@@ -1814,7 +1814,7 @@ const ProjectPage = () => {
                   {message.type === 'user' && (
                     <div className="mr-1 flex-shrink-0">
                       <Avatar className="size-8">
-                        <AvatarImage src={user?.imageUrl} alt="User" />
+                        <AvatarImage src={user?.imageUrl} alt="User avatar" />
                         <AvatarFallback>U</AvatarFallback>
                       </Avatar>
                     </div>
@@ -1874,7 +1874,7 @@ const ProjectPage = () => {
               <div className="flex justify-start items-center space-x-3 animate-pulse">
                 <Image
                   src="/favicon.jpg"
-                  alt="Assistant"
+                  alt="DevilDev AI assistant"
                   width={32}
                   height={32}
                   className="w-8 h-8 rounded-full"
@@ -1890,7 +1890,7 @@ const ProjectPage = () => {
               <div className="flex justify-start items-center space-x-3 animate-pulse">
                 <Image
                   src="/favicon.jpg"
-                  alt="Assistant"
+                  alt="DevilDev AI assistant"
                   width={32}
                   height={32}
                   className="w-8 h-8 rounded-full"
@@ -1906,7 +1906,7 @@ const ProjectPage = () => {
               <div className="flex justify-start items-center space-x-3 animate-pulse">
                 <Image
                   src="/favicon.jpg"
-                  alt="Assistant"
+                  alt="DevilDev AI assistant"
                   width={32}
                   height={32}
                   className="w-8 h-8 rounded-full"
