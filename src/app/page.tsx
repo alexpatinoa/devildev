@@ -514,7 +514,7 @@ export default function Page() {
           >
             <div className="flex items-center justify-between h-16 px-4 border-b border-white/10">
               <div className="flex items-center space-x-2">
-                <Image src="/favicon.jpg" alt="DevilDev Logo" width={24} height={24} />
+                <Image src="/favicon.jpg" alt="DevilDev" width={24} height={24} />
                 <span className="font-semibold">Menu</span>
               </div>
               <button
