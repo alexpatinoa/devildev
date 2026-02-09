@@ -14,7 +14,6 @@ import PactCreationForm from '@/components/Project/PactCreationForm';
 import PactList from '@/components/Project/PactList';
 import { triggerReverseArchitectureGeneration, checkProjectArchitectureByGenerationId, checkPendingArchitectureUpdate, triggerPendingArchitectureRegeneration } from '../../../../actions/reverse-architecture';
 import RevArchitecture from '@/components/core/revArchitecture';
-import ProjectContextDocs from '@/components/core/ProjectContextDocs';
 import { ProjectPageSkeleton } from '@/components/ui/project-skeleton';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
@@ -78,7 +77,7 @@ const ProjectPage = () => {
   
   const [project, setProject] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'architecture' | 'docs' | 'bug' | 'tasks' | 'features'>('architecture');
+  const [activeTab, setActiveTab] = useState<'architecture' | 'bug' | 'tasks' | 'features'>('architecture');
   const [openDynamicTabs, setOpenDynamicTabs] = useState<DynamicTab[]>([]);
   const [draggedTab, setDraggedTab] = useState<string | null>(null);
   const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
@@ -116,8 +115,6 @@ const ProjectPage = () => {
   } | null>(null);
   const [isRegeneratingFromPending, setIsRegeneratingFromPending] = useState(false);
   const [isCreatingChat, setIsCreatingChat] = useState(false);
-  const [selectedProjectDocsId, setSelectedProjectDocsId] = useState<string | undefined>(undefined);
-  const [selectedDocsName, setSelectedDocsName] = useState<string | undefined>(undefined);
   
   // Pact tracking state
   const [pactsCache, setPactsCache] = useState<{
@@ -150,7 +147,7 @@ const ProjectPage = () => {
   // Mobile responsive state
   const [isMobile, setIsMobile] = useState(false);
   // Mobile-only: which panel is open fullscreen
-  const [mobileActivePanel, setMobileActivePanel] = useState<'architecture' | 'docs' | null>(null);
+  const [mobileActivePanel, setMobileActivePanel] = useState<'architecture' | null>(null);
   
   // Fullscreen architecture state
   const [isArchitectureFullscreen, setIsArchitectureFullscreen] = useState(false);
@@ -1524,11 +1521,6 @@ const ProjectPage = () => {
               userInitial={user?.firstName?.charAt(0) || user?.emailAddresses?.[0]?.emailAddress.charAt(0) || 'U'}
               copiedPrompts={copiedPrompts}
               onCopyPrompt={copyPrompt}
-              onViewDocs={(projectDocsId, docsName) => {
-                setSelectedProjectDocsId(projectDocsId);
-                setSelectedDocsName(docsName);
-                setMobileActivePanel('docs');
-              }}
               onOpenTab={handleOpenTab}
               messagesEndRef={messagesEndRef}
             />
@@ -1544,7 +1536,7 @@ const ProjectPage = () => {
             />
           </div>
 
-          {/* Mobile bottom bar for Architecture and Pacts */}
+          {/* Mobile bottom bar for Architecture */}
           <div className="fixed bottom-4 left-4 right-4 z-30 flex gap-3">
             <button
               onClick={() => setMobileActivePanel('architecture')}
@@ -1552,21 +1544,13 @@ const ProjectPage = () => {
             >
               Architecture
             </button>
-            <button
-              onClick={() => setMobileActivePanel('docs')}
-              className="flex-1 px-3 py-2 text-sm font-medium rounded-lg border border-gray-600 bg-black/60 text-white hover:bg-gray-900"
-            >
-              Pacts
-            </button>
           </div>
 
           {/* Mobile fullscreen overlay for selected panel */}
           {mobileActivePanel && (
             <div className="fixed inset-0 z-40 bg-black">
               <div className="h-16 bg-black/90 backdrop-blur-sm border-b border-gray-800/50 flex items-center justify-between px-4">
-                <div className="text-white font-semibold text-base">
-                  {mobileActivePanel === 'architecture' ? 'Architecture' : 'Pacts'}
-                </div>
+                <div className="text-white font-semibold text-base">Architecture</div>
                 
                 <div className="flex items-center space-x-2">
                   {/* Version Dropdown for mobile */}
@@ -1628,26 +1612,14 @@ const ProjectPage = () => {
                 </div>
               </div>
               <div className="h-[calc(100vh-4rem)] overflow-hidden">
-                {mobileActivePanel === 'architecture' ? (
-                  <RevArchitecture
-                    key={`mobile-arch-${selectedVersionIndex}`}
-                    architectureData={architectureData}
-                    isFullscreen={true}
-                    customPositions={customPositions}
-                    onPositionsChange={handlePositionsChange}
-                    onComponentSelect={handleArchitectureComponentSelect}
-                  />
-                ) : (
-                  <ProjectContextDocs
-                    key={activeChatId || 'no-chat-mobile'}
-                    projectId={projectId}
-                    projectChatId={activeChatId}
-                    projectDocsId={selectedProjectDocsId}
-                    docsName={selectedDocsName}
-                    projectPlan={projectPlan}
-                    projectPhases={projectPhases}
-                  />
-                )}
+                <RevArchitecture
+                  key={`mobile-arch-${selectedVersionIndex}`}
+                  architectureData={architectureData}
+                  isFullscreen={true}
+                  customPositions={customPositions}
+                  onPositionsChange={handlePositionsChange}
+                  onComponentSelect={handleArchitectureComponentSelect}
+                />
               </div>
             </div>
           )}
@@ -1750,11 +1722,6 @@ const ProjectPage = () => {
               userInitial={user?.firstName?.charAt(0) || user?.emailAddresses?.[0]?.emailAddress.charAt(0) || 'U'}
               copiedPrompts={copiedPrompts}
               onCopyPrompt={copyPrompt}
-              onViewDocs={(projectDocsId, docsName) => {
-                setSelectedProjectDocsId(projectDocsId);
-                setSelectedDocsName(docsName);
-                setActiveTab('docs');
-              }}
               onOpenTab={handleOpenTab}
               messagesEndRef={messagesEndRef}
             />
@@ -1804,17 +1771,6 @@ const ProjectPage = () => {
                 Architecture
               </button>
               
-              <button
-                onClick={() => setActiveTab('docs')}
-                className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${
-                  activeTab === 'docs'
-                    ? 'text-white bg-gray-700/50'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                Pacts
-              </button>
-
               {/* Divider - only show if there are dynamic tabs */}
               {openDynamicTabs.length > 0 && (
                 <div className="h-6 w-px bg-gray-700 mx-2" />
@@ -2004,19 +1960,6 @@ const ProjectPage = () => {
                 onComponentSelect={handleArchitectureComponentSelect}
               />
               </div>
-            </div>
-
-            {/* Pacts Tab */}
-            <div className={`h-full ${activeTab === 'docs' ? 'block' : 'hidden'}`}>
-              <ProjectContextDocs
-                key={activeChatId || 'no-chat'}
-                projectId={projectId}
-                projectChatId={activeChatId}
-                projectDocsId={selectedProjectDocsId}
-                docsName={selectedDocsName}
-                projectPlan={projectPlan}
-                projectPhases={projectPhases}
-              />
             </div>
 
             {/* Bug Tab */}

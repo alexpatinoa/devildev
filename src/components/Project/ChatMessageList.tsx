@@ -11,7 +11,6 @@ interface ChatMessageListProps {
   userInitial?: string;
   copiedPrompts: Record<string, boolean>;
   onCopyPrompt: (messageId: string, prompt: string) => void;
-  onViewDocs?: (projectDocsId: string, docsName?: string) => void;
   onOpenTab?: (tabType: 'bug' | 'tasks' | 'features') => void;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
 }
@@ -23,7 +22,6 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   userInitial,
   copiedPrompts,
   onCopyPrompt,
-  onViewDocs,
   onOpenTab,
   messagesEndRef,
 }) => {
@@ -96,7 +94,6 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
           userInitial={userInitial}
           copiedPrompts={copiedPrompts}
           onCopyPrompt={onCopyPrompt}
-          onViewDocs={onViewDocs}
         />
       ))}
 

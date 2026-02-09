@@ -11,7 +11,6 @@ interface ChatMessageProps {
   userInitial?: string;
   copiedPrompts: Record<string, boolean>;
   onCopyPrompt: (messageId: string, prompt: string) => void;
-  onViewDocs?: (projectDocsId: string, docsName?: string) => void;
 }
 
 export const ChatMessage: React.FC<ChatMessageProps> = ({
@@ -21,7 +20,6 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   userInitial = 'U',
   copiedPrompts,
   onCopyPrompt,
-  onViewDocs,
 }) => {
   return (
     <div key={message.id || `fallback-${index}`} className="flex flex-col items-start">
@@ -49,18 +47,6 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           <p className="text-sm whitespace-pre-wrap">{message.content}</p>
         </div>
       </div>
-
-      {/* Project Docs button - only show for assistant messages with projectDocsId */}
-      {message.type === 'assistant' && message.projectDocsId && onViewDocs && (
-        <div className="flex justify-start items-center space-x-3 ml-12 h-12 my-2 relative">
-          <button
-            onClick={() => onViewDocs(message.projectDocsId!, message.docsName)}
-            className="px-6 py-2 border rounded-lg font-bold cursor-pointer transition-colors duration-200 relative hover:bg-transparent border-white hover:text-white bg-white text-black"
-          >
-            <span>View Docs</span>
-          </button>
-        </div>
-      )}
 
       {/* Prompt box - only show for assistant messages with prompt */}
       {message.type === 'assistant' && message.prompt && (
