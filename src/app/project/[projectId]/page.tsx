@@ -1179,31 +1179,31 @@ const ProjectPage = () => {
         );
       }  
 
-      const chatbotResponse = await projectChatBot(currentInput.trim() ,project.framework, messages, architectureData, project.detailedAnalysis);
-      let cleanedResponse = chatbotResponse; 
-      if (typeof cleanedResponse === 'string') {
-        cleanedResponse = cleanedResponse 
-          .replace(/^```json\s*/i, '')
-          .replace(/^```\s*/, '') 
-          .replace(/\s*```\s*$/, '')
-          .trim();
+      const chatbotResponse = await projectChatBot(
+        currentInput.trim(),
+        project.framework,
+        messages,
+        architectureData,
+        project.detailedAnalysis
+      );
+
+      // Ensure we always end up with a plain text assistant response
+      let assistantContent: string;
+      if (typeof chatbotResponse === 'string') {
+        const trimmed = chatbotResponse.trim();
+        const cleaned = trimmed.replace(/^```[\s\S]*?```$/g, '').trim();
+        assistantContent = cleaned || trimmed;
+      } else if (chatbotResponse && 'error' in chatbotResponse) {
+        assistantContent = `Sorry, there was an error: ${chatbotResponse.error}`;
+      } else {
+        assistantContent = 'Sorry, there was an issue generating a response.';
       }
-      
-      const parsedResponse = typeof cleanedResponse === 'string' 
-        ? JSON.parse(cleanedResponse) 
-        : cleanedResponse; 
 
-
-        alert("PARSED")
-        console.log("PARSED RESPONSE: ", parsedResponse);
-
- 
-        
       // For now, just add a simple response
       const assistantMessage: ProjectMessage = {
         id: generateMessageId(), 
         type: 'assistant',
-        content: parsedResponse.response,
+        content: assistantContent,
         timestamp: new Date().toISOString()
       };
 

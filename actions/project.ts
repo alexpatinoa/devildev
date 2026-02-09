@@ -434,7 +434,7 @@ export async function updateProjectMessages(projectId: string, messages: Project
 }
 
 
-export async function projectChatBot( userInput: string, projectFramework: string, conversationHistory: any[], projectArchitecture: any, projectAnalysis: string) {
+export async function projectChatBot( userInput: string, projectFramework: string, conversationHistory: any[], projectArchitecture: any, projectAnalysis: string): Promise<string | { error: string }> {
     const { userId } = await auth();
     if (!userId) { 
         return { error: 'Unauthorized' };
