@@ -7,7 +7,7 @@ import { Maximize, X, Menu, MessageCircle, Plus, Loader2, MessageSquare, BrainCi
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { getProject, updateProjectComponentPositions, ProjectMessage, projectChatBot, createProjectChat, getProjectChat, addMessageToProjectChat } from "../../../../actions/project";
 import { SignOutButton, useUser } from '@clerk/nextjs';
-import { ChatMessageList, ChatInput } from '@/components/Project';
+import { ChatMessageList, ChatInput, ChatHeader } from '@/components/Project';
 import PactDetailView from '@/components/Project/PactDetailView';
 import { getPactsByProject, Pact, PactType } from "../../../../actions/project/pacts";
 import PactCreationForm from '@/components/Project/PactCreationForm';
@@ -131,8 +131,6 @@ const ProjectPage = () => {
   const [isCreatingPact, setIsCreatingPact] = useState(false);
   const [creatingPactType, setCreatingPactType] = useState<PactType>('BUG');
   const [selectedPact, setSelectedPact] = useState<Pact | null>(null);
-  const [projectPlan, setProjectPlan] = useState<string>("Not Generated");
-  const [projectPhases, setProjectPhases] = useState<string[]>(["Not Generated 1", "Not Generated 2"]); 
   const [isCharacterLimitReached, setIsCharacterLimitReached] = useState(false);
   const [showMaxChatsDialog, setShowMaxChatsDialog] = useState(false);
   const [showCharacterLimitDialog, setShowCharacterLimitDialog] = useState(false);
@@ -140,10 +138,10 @@ const ProjectPage = () => {
   const [leftPanelWidth, setLeftPanelWidth] = useState(30);
   const [isResizing, setIsResizing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  
+
   // Sidebar state
   const [isSidebarHovered, setIsSidebarHovered] = useState(false);
-  
+
   // Mobile responsive state
   const [isMobile, setIsMobile] = useState(false);
   // Mobile-only: which panel is open fullscreen
@@ -1284,14 +1282,14 @@ const ProjectPage = () => {
       <nav className="h-16 bg-black/90 backdrop-blur-sm border-b border-gray-800/50 flex items-center justify-between px-6 flex-shrink-0 relative">
         {/* Left side - Burger menu and Logo */}
         <div className="flex z-20 justify-center items-center space-x-4">
-          <button 
+          <button
             onClick={() => setIsSidebarHovered(!isSidebarHovered)}
             className={`p-2 hover:bg-gray-800/50 rounded-lg transition-all duration-200`}
             title="Open sidebar"
-          > 
+          >
             <Menu className={`h-6 w-6 text-gray-400 hover:text-white transition-colors`} />
           </button>
-        
+
           <button
                 onClick={() => router.push('/')}
                 className="flex items-center cursor-pointer hover:opacity-80 transition-opacity group"
@@ -1388,7 +1386,7 @@ const ProjectPage = () => {
 
       {/* Hover trigger area */}
       {isSignedIn && (
-        <div 
+        <div
           className="fixed top-16 left-0 w-4 h-[calc(100vh-4rem)] z-30"
           onMouseEnter={() => setIsSidebarHovered(true)}
         />
@@ -1396,14 +1394,14 @@ const ProjectPage = () => {
 
       {/* Hover-expandable Sidebar */}
       {isSignedIn && (
-        <div 
+        <div
           className={`fixed top-16 left-0 h-[calc(100vh-4rem)] bg-black/30 backdrop-blur-md border-r border-red-500/20 transition-all duration-300 ease-in-out z-20 group ${
             isSidebarHovered ? 'w-72' : 'w-0'
           } overflow-hidden`}
           onMouseLeave={() => setIsSidebarHovered(false)}
         >
           <div className="absolute inset-0 bg-gradient-to-r from-red-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-          
+
           <div className="relative flex flex-col h-full pt-8 pb-3">
             {/* Navigation items */}
             <div className="px-2 space-y-2">
@@ -1442,11 +1440,8 @@ const ProjectPage = () => {
                 }`}>
                   Project Chats
                 </span>
-                
-
-
               </div>
-              
+
               <div className="space-y-1 overflow-y-auto max-h-96 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-600">
                 {projectChats.map((chat) => (
                   <button
@@ -1503,14 +1498,18 @@ const ProjectPage = () => {
         <div className="flex-1 p-4 min-h-0 relative pb-4 h-full">
           {/* Mobile: Chat takes ~75% height and full width */}
           <div className="bg-black border border-gray-800 rounded-xl flex flex-col overflow-hidden h-full" style={{ height: '85vh' }}>
-            <div className="flex items-center px-4 py-3 rounded-t-xl border-b border-gray-800">
-              <div className="flex space-x-1">
-                <button
-                  className={`px-3 py-1 text-sm font-bold rounded-md transition-all duration-200 text-white bg-gray-700/50`}
-                >
-                  Project Chat
-                </button>
-              </div>
+            <div className="flex items-center justify-between px-4 py-3 rounded-t-xl border-b border-gray-800">
+              <span className="px-3 py-1 text-sm font-bold rounded-md text-white bg-gray-700/50">Project Chat</span>
+              <ChatHeader
+                onNewChat={handleCreateNewChat}
+                isCreatingChat={isCreatingChat}
+                isChatLoading={isChatLoading}
+                isArchitectureGenerating={isArchitectureGenerating}
+                hasMessages={messages.length > 0}
+                chats={projectChats}
+                activeChatId={activeChatId}
+                onSelectChat={handleChatSwitch}
+              />
             </div>
 
             {/* Chat Messages */}
@@ -1631,7 +1630,7 @@ const ProjectPage = () => {
           className="bg-black border border-gray-800 rounded-xl flex flex-col min-h-0 transition-all duration-200 ease-out"
           style={{ width: `${leftPanelWidth}%` }}
         >
-          <div className="flex items-center px-4 py-3 rounded-t-xl border-b border-gray-800">
+          <div className="flex items-center justify-between px-4 py-3 rounded-t-xl border-b border-gray-800">
             <div className="flex space-x-1">
               <button
                 onClick={() => setLeftActiveTab('chat')}
@@ -1654,6 +1653,18 @@ const ProjectPage = () => {
                 Project Structure
               </button>
             </div>
+            {leftActiveTab === 'chat' && (
+              <ChatHeader
+                onNewChat={handleCreateNewChat}
+                isCreatingChat={isCreatingChat}
+                isChatLoading={isChatLoading}
+                isArchitectureGenerating={isArchitectureGenerating}
+                hasMessages={messages.length > 0}
+                chats={projectChats}
+                activeChatId={activeChatId}
+                onSelectChat={handleChatSwitch}
+              />
+            )}
           </div>
 
           {/* Project Structure Tab */}
