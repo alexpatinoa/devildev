@@ -110,7 +110,7 @@ export default function HomeNav({ currentPage }: HomeNavProps) {
                 >
                   <Image
                     src="/github-mark-white.svg"
-                    alt="DevilDev on GitHub"
+                    alt="GitHub"
                     width={20}
                     height={20}
                     className="h-[20px] w-[20px]"
