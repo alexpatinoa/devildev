@@ -345,7 +345,7 @@ export default function ImportGitRepository({ onImport }: ImportGitRepositoryPro
                     <div className="absolute -inset-6 rounded-2xl bg-red-500/20 blur-2xl" aria-hidden="true" />
                     <Image
                       src="/main00.png"
-                      alt="DevilDev Logo"
+                      alt="DevilDev"
                       width={96}
                       height={96}
                       className="rounded-xl shadow-xl"
