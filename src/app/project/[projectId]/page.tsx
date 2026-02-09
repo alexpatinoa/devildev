@@ -1310,7 +1310,7 @@ const ProjectPage = () => {
         <div className="flex z-10 absolute w-full justify-center items-center">
         <div className="flex items-center space-x-3">
           <div className="hidden md:flex items-center space-x-2 px-3 py-1 bg-gray-800/50 rounded-lg border border-gray-700/50">
-          {project.framework === "react" ? <Image src="/react.png" alt="Project" width={25} height={25} /> : <Image src="/nextjs.png" alt="Project" width={25} height={25} />}
+          {project.framework === "react" ? <Image src="/react.png" alt="React framework" width={25} height={25} /> : <Image src="/nextjs.png" alt="Next.js framework" width={25} height={25} />}
             <span className="text-sm font-medium">{project.name}</span>
           </div>
         </div>
