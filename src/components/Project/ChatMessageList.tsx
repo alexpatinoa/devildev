@@ -7,7 +7,6 @@ import { Bug, ListTodo, Sparkles } from 'lucide-react';
 interface ChatMessageListProps {
   messages: ProjectMessage[];
   isChatLoading: boolean;
-  isPromptGenerating: boolean;
   isDocsGenerating: boolean;
   userImageUrl?: string;
   userInitial?: string;
@@ -20,8 +19,7 @@ interface ChatMessageListProps {
 
 export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   messages,
-  isChatLoading,
-  isPromptGenerating,
+  isChatLoading, 
   isDocsGenerating,
   userImageUrl,
   userInitial,
@@ -31,7 +29,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   onOpenTab,
   messagesEndRef,
 }) => {
-  const showEmptyState = messages.length === 0 && !isChatLoading && !isPromptGenerating && !isDocsGenerating;
+  const showEmptyState = messages.length === 0 && !isChatLoading && !isDocsGenerating;
 
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-600 hover:scrollbar-thumb-gray-500">
@@ -120,23 +118,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
           </div>
         </div>
       )}
-
-      {isPromptGenerating && (
-        <div className="flex justify-start items-center space-x-3 animate-pulse">
-          <Image
-            src="/favicon.jpg"
-            alt="Assistant"
-            width={32}
-            height={32}
-            className="w-8 h-8 rounded-full"
-          />
-          <div className="text-white/69 text-sm flex items-center">
-            <span>generating prompt</span>
-            <span className="ml-1">...</span>
-          </div>
-        </div>
-      )}
-
+      
       {isDocsGenerating && (
         <div className="flex justify-start items-center space-x-3 animate-pulse">
           <Image

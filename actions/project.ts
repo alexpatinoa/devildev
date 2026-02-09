@@ -5,14 +5,14 @@ import { cache } from "react";
 import { ChatOpenAI } from "@langchain/openai";
 import { PromptTemplate } from "@langchain/core/prompts";
 import { StringOutputParser } from "@langchain/core/output_parsers";
-import { generateEasyMediumPrompt, generateNthProjectPhase, generateProjectPlanDocs, initialDocsGenerationPrompt, ultraProjectChatBotPrompt } from "../prompts/ReverseArchitecture";
+import { generateNthProjectPhase, generateProjectPlanDocs, initialDocsGenerationPrompt, ultraProjectChatBotPrompt } from "../prompts/ReverseArchitecture";
 const openaiKey = process.env.OPENAI_API_KEY;
 const llm = new ChatOpenAI({
   openAIApiKey: openaiKey,
   model: "gpt-5-mini-2025-08-07" 
 })
 
-const llm2 = new ChatOpenAI({
+const llm2 = new ChatOpenAI({ 
   openAIApiKey: openaiKey,
   model: "gpt-5-nano-2025-08-07"
 })
@@ -436,7 +436,7 @@ export async function updateProjectMessages(projectId: string, messages: Project
 
 export async function projectChatBot( userInput: string, projectFramework: string, conversationHistory: any[], projectArchitecture: any, projectAnalysis: string) {
     const { userId } = await auth();
-    if (!userId) {
+    if (!userId) { 
         return { error: 'Unauthorized' };
     }
 
@@ -458,26 +458,6 @@ export async function projectChatBot( userInput: string, projectFramework: strin
     return response;
 }
 
-export async function generatePrompt(userInput: string, projectFramework: string, conversationHistory: any[], projectAnalysis: string) {
-    const { userId } = await auth();
-    if (!userId) {
-        return { error: 'Unauthorized' };
-    }
-    // Format conversation history for the prompt
-    const formattedHistory = conversationHistory.map(msg => 
-        `${msg.type === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
-    ).join('\n'); 
-
-    const prompt = PromptTemplate.fromTemplate(generateEasyMediumPrompt);
-    const chain = prompt.pipe(llm).pipe(new StringOutputParser());
-        const response = await chain.invoke({
-            userQuery: userInput,
-            framework: projectFramework,
-            projectAnalysis: projectAnalysis,
-            conversationHistory: formattedHistory
-        });
-    return response;
-} 
 
 export async function initialDocsGeneration(userInput: string, projectFramework: string, conversationHistory: any[], projectAnalysis: string) {
     const { userId } = await auth();

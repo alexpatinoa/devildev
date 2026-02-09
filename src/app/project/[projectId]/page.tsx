@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { useParams, useRouter } from "next/navigation";
 import { Maximize, X, Menu, MessageCircle, Plus, Loader2, MessageSquare, BrainCircuit, FolderKanban, ChevronDown, ChevronRight, Folder, FolderOpen, File, Bug, ListTodo, Sparkles, GripVertical } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { getProject, updateProjectComponentPositions, ProjectMessage, projectChatBot, generatePrompt, createProjectContextDocs, generateProjectPlan, generateNthPhase, updateProjectContextDocs, createProjectChat, getProjectChat, addMessageToProjectChat } from "../../../../actions/project";
+import { getProject, updateProjectComponentPositions, ProjectMessage, projectChatBot, createProjectContextDocs, generateProjectPlan, generateNthPhase, updateProjectContextDocs, createProjectChat, getProjectChat, addMessageToProjectChat } from "../../../../actions/project";
 import { SignOutButton, useUser } from '@clerk/nextjs';
 import { ChatMessageList, ChatInput } from '@/components/Project';
 import PactDetailView from '@/components/Project/PactDetailView';
@@ -116,7 +116,6 @@ const ProjectPage = () => {
     lastGeneratedCommitHash: string | null;
   } | null>(null);
   const [isRegeneratingFromPending, setIsRegeneratingFromPending] = useState(false);
-  const [isPromptGenerating, setIsPromptGenerating] = useState(false);
   const [isDocsGenerating, setIsDocsGenerating] = useState(false);
   const [isCreatingChat, setIsCreatingChat] = useState(false);
   const [selectedProjectDocsId, setSelectedProjectDocsId] = useState<string | undefined>(undefined);
@@ -140,7 +139,6 @@ const ProjectPage = () => {
   const [projectPlan, setProjectPlan] = useState<string>("Not Generated");
   const [projectPhases, setProjectPhases] = useState<string[]>(["Not Generated 1", "Not Generated 2"]); 
   const [isCharacterLimitReached, setIsCharacterLimitReached] = useState(false);
-  const [isPromptLimitReached, setIsPromptLimitReached] = useState(false);
   const [showMaxChatsDialog, setShowMaxChatsDialog] = useState(false);
   const [showCharacterLimitDialog, setShowCharacterLimitDialog] = useState(false);
   // Panel resize state
@@ -794,7 +792,7 @@ const ProjectPage = () => {
   // Handle creating new chat
   const handleCreateNewChat = async () => {
 
-    if(isChatLoading || isPromptGenerating || isDocsGenerating || isArchitectureGenerating || messages.length === 0 || isLoadingUserSubscription) return;
+    if(isChatLoading || isDocsGenerating || isArchitectureGenerating || messages.length === 0 || isLoadingUserSubscription) return;
     if (projectChats.length >= MAX_CHATS) {
       setShowMaxChatsDialog(true);
       return;
@@ -1061,9 +1059,7 @@ const ProjectPage = () => {
   // Monitor character limit
   useEffect(() => {
     const totalCharacters = calculateTotalCharacters(messages);
-    const existingPromptCount = messages.filter(m => m.type === 'assistant' && (m as any).prompt).length;
     setIsCharacterLimitReached(totalCharacters >= MAX_CHARACTERS);
-    setIsPromptLimitReached(existingPromptCount >= 3);
   }, [messages]);
 
   // Fetch all pacts on initial load (leveraging database index for each type)
@@ -1144,7 +1140,7 @@ const ProjectPage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputMessage.trim() || isChatLoading || isCreatingChat || !activeChatId) return;
-    if (isCharacterLimitReached || isPromptLimitReached) {
+    if (isCharacterLimitReached) {
       setShowCharacterLimitDialog(true);
       return;
     } 
@@ -1186,7 +1182,7 @@ const ProjectPage = () => {
               : chat
           )
         );
-      } 
+      }  
 
       const chatbotResponse = await projectChatBot(currentInput.trim() ,project.framework, messages, architectureData, project.detailedAnalysis);
       let cleanedResponse = chatbotResponse; 
@@ -1217,33 +1213,7 @@ const ProjectPage = () => {
       setIsChatLoading(false);
 
       // DELETE THIS AFTER TESTING  
-      if(parsedResponse.prompt && parsedResponse.wannaStart && (parsedResponse.difficulty === "easy" || parsedResponse.difficulty === "medium")){
-        // Count existing prompts already generated in this chat
-        setIsPromptGenerating(true); 
-          
-          const  prompt = await generatePrompt(inputMessage.trim(), project.framework, messages, project.detailedAnalysis);
- 
-          
-          // Only update the assistant message if prompt is a string
-          if (typeof prompt === 'string') {
-            // Update the assistant message with the generated prompt
-            const updatedAssistantMessage: ProjectMessage = {
-              ...assistantMessage,
-              prompt: prompt
-            };
-            
-            // Update the message in local state
-            setMessages(prevMessages => 
-              prevMessages.map(msg => 
-                msg.id === assistantMessage.id ? updatedAssistantMessage : msg
-              )
-            );
-            
-            // Update the assistant message variable for database save
-            Object.assign(assistantMessage, updatedAssistantMessage);
-            setIsPromptGenerating(false);
-          }
-      }else if(parsedResponse.docs && parsedResponse.wannaStart){
+      if(parsedResponse.docs && parsedResponse.wannaStart){
         setIsDocsGenerating(true);   
          // Here Docs generation logic 
          const projectSummarizedContext = await summarizeProjectDocsContext(inputMessage.trim(), project.framework, messages, project.detailedAnalysis);
@@ -1517,7 +1487,7 @@ const ProjectPage = () => {
                 onClick={handleCreateNewChat}
                 className="flex items-center space-x-4 px-3 py-3 rounded-lg text-gray-300 hover:text-white hover:bg-black/40 hover:border-red-500/30 border border-transparent transition-all duration-200 group/item w-full"
                 title="New Chat"
-                disabled={isChatLoading || isPromptGenerating || isDocsGenerating || isArchitectureGenerating}
+                disabled={isChatLoading || isDocsGenerating || isArchitectureGenerating}
               >
                 <Plus className="h-5 w-5 flex-shrink-0 group-hover/item:scale-105 transition-transform duration-200 text-red-400" />
                 <span className={`text-sm font-medium whitespace-nowrap transition-all duration-300 ${
@@ -1564,7 +1534,7 @@ const ProjectPage = () => {
                         : 'text-gray-300 hover:text-white hover:bg-black/40 border border-transparent'
                     }`}
                     title={chat.title}
-                    disabled={isChatLoading || isPromptGenerating || isDocsGenerating || isArchitectureGenerating}
+                    disabled={isChatLoading || isDocsGenerating || isArchitectureGenerating}
                   >
                     <MessageCircle className={`h-4 w-4 flex-shrink-0 transition-transform duration-200 ${
                       activeChatId === chat.id.toString() ? 'text-red-400' : 'text-gray-400 group-hover/chat:text-red-400'
@@ -1623,7 +1593,6 @@ const ProjectPage = () => {
             <ChatMessageList
               messages={messages}
               isChatLoading={isChatLoading}
-              isPromptGenerating={isPromptGenerating}
               isDocsGenerating={isDocsGenerating}
               userImageUrl={user?.imageUrl}
               userInitial={user?.firstName?.charAt(0) || user?.emailAddresses?.[0]?.emailAddress.charAt(0) || 'U'}
@@ -1851,7 +1820,6 @@ const ProjectPage = () => {
             <ChatMessageList
               messages={messages}
               isChatLoading={isChatLoading}
-              isPromptGenerating={isPromptGenerating}
               isDocsGenerating={isDocsGenerating}
               userImageUrl={user?.imageUrl}
               userInitial={user?.firstName?.charAt(0) || user?.emailAddresses?.[0]?.emailAddress.charAt(0) || 'U'}
@@ -1870,7 +1838,7 @@ const ProjectPage = () => {
             <ChatInput
               inputMessage={inputMessage}
               textareaHeight={textareaHeight}
-              isChatLoading={isChatLoading || isCharacterLimitReached || isPromptLimitReached}
+              isChatLoading={isChatLoading || isCharacterLimitReached}
               isCreatingChat={isCreatingChat}
               onInputChange={handleTextareaChange}
               onSubmit={handleSubmit}
