@@ -41,6 +41,7 @@
     "dodopayments": "^2.0.1",
     "dotenv": "^17.2.3",
     "fs": "^0.0.1-security",
+    "github-language-colors": "^1.0.0",
     "gpt-tokenizer": "^3.0.1",
     "inngest": "^3.44.3",
     "jszip": "^3.10.1",
