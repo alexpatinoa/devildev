@@ -13,10 +13,22 @@ import { useUser } from '@clerk/nextjs';
 import { maxNumberOfProjectsFree, maxNumberOfProjectsPro } from '../../Limits';
 import useUserSubscription from '@/hooks/useSubscription';
 import PricingDialog from './PricingDialog';
+import languageColors from 'github-language-colors';
 // Removed card and glow imports for a minimalist view
 
-interface Repository { 
-  id: number; 
+const FALLBACK_COLOR = '#6B7280';
+
+/**
+ * Get the color for a programming language from github-language-colors.
+ * Returns a fallback gray color if the language is not found.
+ */
+const getLanguageColor = (language: string | null | undefined): string => {
+  if (!language) return FALLBACK_COLOR;
+  return (languageColors as Record<string, string>)[language] ?? FALLBACK_COLOR;
+};
+
+interface Repository {
+  id: number;
   name: string;
   fullName: string;
   description: string | null;
@@ -545,7 +557,12 @@ export default function ImportGitRepository({ onImport }: ImportGitRepositoryPro
                         <td className="px-4 py-3 text-sm text-gray-300">
                           {repo.language ? (
                             <div className="flex items-center space-x-2">
-                              <div className="w-2 h-2 rounded-full bg-red-400" />
+                              <span
+                                className="w-2 h-2 rounded-full"
+                                style={{ backgroundColor: getLanguageColor(repo.language) }}
+                                title={`${repo.language} — Language`}
+                                aria-label={repo.language}
+                              />
                               <span>{repo.language}</span>
                             </div>
                           ) : (
