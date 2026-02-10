@@ -5,7 +5,7 @@ import { cache } from "react";
 import { ChatOpenAI } from "@langchain/openai";
 import { PromptTemplate } from "@langchain/core/prompts";
 import { StringOutputParser } from "@langchain/core/output_parsers";
-import {  initialDocsGenerationPrompt, ultraProjectChatBotPrompt } from "../prompts/ReverseArchitecture";
+import { ultraProjectChatBotPrompt } from "../prompts/ReverseArchitecture";
 const openaiKey = process.env.OPENAI_API_KEY;
 const llm = new ChatOpenAI({
   openAIApiKey: openaiKey,
@@ -432,9 +432,9 @@ export async function updateProjectMessages(projectId: string, messages: Project
 }
 
 
-export async function projectChatBot( userInput: string, projectFramework: string, conversationHistory: any[], projectArchitecture: any, projectAnalysis: string): Promise<string | { error: string }> {
+export async function projectChatBot( userInput: string, projectFramework: string, conversationHistory: any[], projectArchitecture: any): Promise<string | { error: string }> {
     const { userId } = await auth();
-    if (!userId) { 
+    if (!userId) {  
         return { error: 'Unauthorized' };
     }
 
@@ -442,7 +442,7 @@ export async function projectChatBot( userInput: string, projectFramework: strin
      const formattedHistory = conversationHistory.map(msg => 
         `${msg.type === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
     ).join('\n'); 
-
+ 
     
     const prompt = PromptTemplate.fromTemplate(ultraProjectChatBotPrompt);
     const chain = prompt.pipe(llmWithWeb).pipe(new StringOutputParser());
@@ -456,27 +456,6 @@ export async function projectChatBot( userInput: string, projectFramework: strin
     return response;
 }
 
-
-export async function initialDocsGeneration(userInput: string, projectFramework: string, conversationHistory: any[], projectAnalysis: string) {
-    const { userId } = await auth();
-    if (!userId) {
-        return { error: 'Unauthorized' };
-    }
-    // Format conversation history for the prompt
-    const formattedHistory = conversationHistory.map(msg => 
-        `${msg.type === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
-    ).join('\n');
-
-    const prompt = PromptTemplate.fromTemplate(initialDocsGenerationPrompt);
-    const chain = prompt.pipe(llm).pipe(new StringOutputParser());
-    const response = await chain.invoke({
-        userQuery: userInput,
-        framework: projectFramework,
-        projectAnalysis: projectAnalysis,
-        conversationHistory: formattedHistory
-    });
-    return response;
-}
 
 // Get project context docs by ID
 export async function getProjectContextDocs(projectChatId: any) {

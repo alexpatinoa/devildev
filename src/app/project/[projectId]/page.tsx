@@ -1172,14 +1172,13 @@ const ProjectPage = () => {
               : chat
           )
         );
-      }  
+      }   
 
       const chatbotResponse = await projectChatBot(
         currentInput.trim(),
         project.framework,
         messages,
         architectureData,
-        project.detailedAnalysis
       );
 
       // Ensure we always end up with a plain text assistant response
