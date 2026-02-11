@@ -1,5 +1,5 @@
 import React from 'react';
-import { Send } from 'lucide-react';
+import { Send, Bug, ListTodo, Sparkles } from 'lucide-react';
 
 interface ChatInputProps {
   inputMessage: string;
@@ -8,6 +8,8 @@ interface ChatInputProps {
   isCreatingChat: boolean;
   onInputChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   onSubmit: (e: React.FormEvent) => void;
+  onOpenTab?: (tabType: 'bug' | 'tasks' | 'features') => void;
+  showQuickActions?: boolean;
   placeholder?: string;
   maxLength?: number;
 }
@@ -19,6 +21,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   isCreatingChat,
   onInputChange,
   onSubmit,
+  onOpenTab,
+  showQuickActions = false,
   placeholder = 'Ask about your project...',
   maxLength = 5000,
 }) => {
@@ -45,7 +49,34 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             disabled={isChatLoading || isCreatingChat}
           />
         </div>
-        <div className="bg-black border-l border-r border-b border-gray-500 backdrop-blur-sm rounded-b-2xl px-3 py-2 flex justify-end">
+        <div className="bg-black border-l border-r border-b border-gray-500 backdrop-blur-sm rounded-b-2xl px-3 py-2 flex justify-between items-center">
+          <div className="flex gap-1">
+            {showQuickActions && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onOpenTab?.('bug')}
+                  className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 border border-slate-200/20 cursor-pointer transition-colors"
+                >
+                  <Bug className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onOpenTab?.('tasks')}
+                  className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 border border-slate-200/20 cursor-pointer transition-colors"
+                >
+                  <ListTodo className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onOpenTab?.('features')}
+                  className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-800 border border-slate-200/20 cursor-pointer transition-colors"
+                >
+                  <Sparkles className="h-4 w-4" />
+                </button>
+              </>
+            )}
+          </div>
           <button
             type="submit"
             className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"

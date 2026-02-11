@@ -1531,6 +1531,8 @@ const ProjectPage = () => {
               isCreatingChat={isCreatingChat}
               onInputChange={handleTextareaChange}
               onSubmit={handleSubmit}
+              onOpenTab={handleOpenTab}
+              showQuickActions={messages.length > 0}
             />
           </div>
 
@@ -1744,6 +1746,8 @@ const ProjectPage = () => {
               isCreatingChat={isCreatingChat}
               onInputChange={handleTextareaChange}
               onSubmit={handleSubmit}
+              onOpenTab={handleOpenTab}
+              showQuickActions={messages.length > 0}
             />
           </div>
         </div>

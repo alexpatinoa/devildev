@@ -73,12 +73,12 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
                 </div>
                 <span className="text-white font-semibold text-sm">Features</span>
               </div>
-              <p className="text-slate-400 text-xs text-left leading-relaxed">Plan and implement new features with comprehensive specifications and requirements. Plan and implement new features with comprehensive</p>
+              <p className="text-slate-400 text-xs text-left leading-relaxed">Plan and implement new features with comprehensive specifications, clear functional requirements, and well-defined acceptance criteria for consistent execution.</p>
             </button>
 
             {/* Info message */}
             <p className="text-slate-500 text-xs text-center mt-6 leading-relaxed">
-              Any Pact (Bug/Task/Feature) created will be automatically updated as you commit to GitHub
+              Soon Any Pact (Bug/Task/Feature) created will be automatically updated as you commit to GitHub
             </p>
           </div>
         </div>
