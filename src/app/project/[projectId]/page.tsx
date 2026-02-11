@@ -912,7 +912,7 @@ const ProjectPage = () => {
                   }
                 }
               }
-                              // Set active chat and load its messages
+              // Set active chat and load its messages
               if (targetChatId) {
                 setActiveChatId(targetChatId);
                 const activeChat = sortedChats.find(chat => chat.id.toString() === targetChatId) || 
@@ -944,12 +944,12 @@ const ProjectPage = () => {
                 setProjectChats([newChatFormatted]);
                 setActiveChatId(newChat.id.toString());
                 setMessages([]);
-                
+                 
                 // Update URL
-                window.location.reload();
                 const newUrl = new URL(window.location.href);
                 newUrl.searchParams.set('c', newChat.id.toString());
                 window.history.replaceState({}, '', newUrl.toString());
+                window.location.reload();
               }
             }
             if(isThisFirstGeneration){

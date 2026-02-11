@@ -59,6 +59,42 @@ interface ImportGitRepositoryProps {
   onImport: (repo: Repository, installationId?: string | null) => void;
 } 
 
+function parseRepoFullName(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  // Accept formats: https://github.com/owner/repo, http(s)://www.github.com/owner/repo, owner/repo
+  try {
+    if (/^(https?:\/\/|\/\/)/i.test(trimmed)) {
+      const url = new URL(trimmed.startsWith('//') ? `https:${trimmed}` : trimmed);
+      const hostname = url.hostname.toLowerCase();
+      if (hostname === 'github.com' || hostname === 'www.github.com') {
+        const parts = url.pathname.split('/').filter(Boolean);
+        if (parts.length >= 2) {
+          const repo = parts[1].replace(/\.git$/i, '');
+          return `${parts[0]}/${repo}`;
+        }
+        return null;
+      }
+      return null;
+    }
+  } catch (_) {
+    // Not a valid URL, fall through to owner/repo parsing
+  }
+  // owner/repo plain text
+  let plain = trimmed.replace(/^\/*/, '');
+  if (plain.startsWith('github.com/')) {
+    plain = plain.slice('github.com/'.length);
+  } else if (plain.startsWith('www.github.com/')) {
+    plain = plain.slice('www.github.com/'.length);
+  }
+  const parts = plain.split('/').filter(Boolean);
+  if (parts.length === 2) {
+    const repo = parts[1].replace(/\.git$/i, '');
+    return `${parts[0]}/${repo}`;
+  }
+  return null;
+}
+
 export default function ImportGitRepository({ onImport }: ImportGitRepositoryProps) {
   const { user } = useUser();
   const [repos, setRepos] = useState<Repository[]>([]);
@@ -187,29 +223,6 @@ export default function ImportGitRepository({ onImport }: ImportGitRepositoryPro
       setLoading(false);
       setSearchLoading(false);
     }
-  };
-
-  const parseRepoFullName = (input: string): string | null => {
-    const trimmed = input.trim();
-    if (!trimmed) return null;
-    // Accept formats: https://github.com/owner/repo, http(s)://www.github.com/owner/repo, owner/repo
-    try {
-      if (trimmed.includes('github.com')) {
-        const url = new URL(trimmed);
-        const parts = url.pathname.split('/').filter(Boolean);
-        if (parts.length >= 2) {
-          return `${parts[0]}/${parts[1]}`;
-        }
-        return null;
-      }
-    } catch (_) {
-      // Not a valid URL, fall through to owner/repo parsing
-    }
-    // owner/repo plain text
-    const plain = trimmed.replace(/^\/*/, '');
-    const parts = plain.split('/').filter(Boolean);
-    if (parts.length === 2) return `${parts[0]}/${parts[1]}`;
-    return null;
   };
 
   const handleImportByUrl = async () => {
