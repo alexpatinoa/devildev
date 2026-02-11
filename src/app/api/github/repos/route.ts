@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server';
 import { db } from '@/lib/db';
 import { getInstallationToken } from '@/actions/githubAppAuth';
 import { createOctokitWithToken } from '@/lib/githubClient';
+import { buildGithubReposUrl } from '@/lib/github';
 
 export async function GET(request: NextRequest) {
   try {
@@ -98,14 +99,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'GitHub username not available for search' }, { status: 400 });
     }
 
-    let url = `https://api.github.com/user/repos?sort=updated&per_page=${per_page}&page=${page}`;
-
-    
-    
-    // If search is provided, use the search API instead
-    if (search) {
-      url = `https://api.github.com/search/repositories?q=${encodeURIComponent(search)}+user:${user.githubUsername}`;
-    }
+    const url = buildGithubReposUrl({
+      search,
+      perPage: per_page,
+      page,
+      githubUsername: user.githubUsername ?? null,
+    });
 
     
 
