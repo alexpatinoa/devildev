@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.3.0
+### Added
+- Pacts for tracking bugs, tasks, and features within projects
+- Manual pact creation and management
+
 ## v0.2.0
 ### Added
 - Automatic architecture regeneration on GitHub push events via webhooks

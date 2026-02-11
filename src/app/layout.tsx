@@ -45,7 +45,7 @@ export default function RootLayout({
       signInFallbackRedirectUrl="/"
       signUpFallbackRedirectUrl="/"
     >
-      <html lang="en" suppressHydrationWarning>
+      <html lang="en" className="dark" suppressHydrationWarning>
         <head suppressHydrationWarning>
           {/* Google Analytics */}
           <script async src="https://www.googletagmanager.com/gtag/js?id=G-875ZFE6Y2B"></script>

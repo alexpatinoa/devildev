@@ -54,10 +54,10 @@ interface UserProject {
   repoId: string | null;
   repoFullName: string | null;
 }
-
-interface ImportGitRepositoryProps {
+  
+interface ImportGitRepositoryProps { 
   onImport: (repo: Repository, installationId?: string | null) => void;
-}
+} 
 
 function parseRepoFullName(input: string): string | null {
   const trimmed = input.trim();
@@ -178,8 +178,8 @@ export default function ImportGitRepository({ onImport }: ImportGitRepositoryPro
   };
 
   const isRepositoryImported = (repo: Repository): boolean => {
-    return userProjects.some(project =>
-      project.repoId === repo.id.toString() ||
+    return userProjects.some(project => 
+      project.repoId === repo.id.toString() || 
       project.repoFullName === repo.fullName
     );
   };
@@ -201,12 +201,12 @@ export default function ImportGitRepository({ onImport }: ImportGitRepositoryPro
     }
     try {
       setSearchLoading(!!search);
-      if (!search) setLoading(true);
+      if (!search) setLoading(true); 
 
       const url = new URL('/api/github/repos', window.location.origin);
-      if (search) {
-        url.searchParams.set('search', search);
-      }
+      if (search) { 
+        url.searchParams.set('search', search); 
+      } 
       if (installationId) {
         url.searchParams.set('installationId', installationId);
       }
@@ -283,7 +283,7 @@ export default function ImportGitRepository({ onImport }: ImportGitRepositoryPro
   };
 
   const handleSearch = (searchValue: string) => {
-    if (searchValue.trim()) {
+    if (searchValue.trim()) { 
       fetchRepos(searchValue.trim());
     } else {
       fetchRepos();
@@ -293,7 +293,7 @@ export default function ImportGitRepository({ onImport }: ImportGitRepositoryPro
   const handleImport = async (repo: Repository) => {
     setImporting(repo.id);
     try {
-      // Call the parent's import handler
+      // Call the parent's import handler 
       await onImport(repo, installationId);
       // Refresh user projects to include the newly imported repository
       await fetchUserProjects();
@@ -405,8 +405,8 @@ export default function ImportGitRepository({ onImport }: ImportGitRepositoryPro
   // Check if user has reached project limit
   if (hasReachedProjectLimit()) {
     return (
-      <PricingDialog
-      open={true}
+      <PricingDialog 
+      open={true} 
       onOpenChange={() => {}}
       description={`You have reached the maximum limit of ${userSubscription ? maxNumberOfProjectsPro : maxNumberOfProjectsFree} project${userSubscription ? 's' : ''}. Upgrade to Pro to import up to ${maxNumberOfProjectsPro} projects and unlock premium features.`}
     />
@@ -485,7 +485,7 @@ export default function ImportGitRepository({ onImport }: ImportGitRepositoryPro
               Configure GitHub
             </Button>
           </div>
-
+          
           {searchTerm && (
             <div className="mt-3">
               <Button
@@ -503,7 +503,7 @@ export default function ImportGitRepository({ onImport }: ImportGitRepositoryPro
           )}
         </div>
 
-
+        
 
         {loading ? (
           <div className="overflow-hidden rounded-xl border border-white/10">
