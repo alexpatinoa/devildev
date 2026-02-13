@@ -10,7 +10,6 @@ import { getInstallationToken } from './githubAppAuth';
 import { createToolCallingAgent, AgentExecutor } from "langchain/agents";
 import { ChatPromptTemplate, MessagesPlaceholder } from "@langchain/core/prompts";
 import { maxFreeArchitectureRegenerations } from '../Limits';
-import { Prisma } from '@prisma/client';
 const { inngest } = await import('../src/inngest/client');
 
 const openaiKey = process.env.OPENAI_API_KEY;

@@ -433,17 +433,11 @@ export async function updateProjectMessages(projectId: string, messages: Project
 
 
 export async function projectChatBot( userInput: string, projectFramework: string, conversationHistory: any[], projectArchitecture: any): Promise<string | { error: string }> {
-    const { userId } = await auth();
-    if (!userId) {  
-        return { error: 'Unauthorized' };
-    }
-
      // Format conversation history for the prompt
      const formattedHistory = conversationHistory.map(msg => 
         `${msg.type === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
     ).join('\n'); 
  
-    
     const prompt = PromptTemplate.fromTemplate(ultraProjectChatBotPrompt);
     const chain = prompt.pipe(llmWithWeb).pipe(new StringOutputParser());
     const response = await chain.invoke({
@@ -454,6 +448,10 @@ export async function projectChatBot( userInput: string, projectFramework: strin
     });
 
     return response;
+}
+
+export async function createPactProjectChatBot() {
+
 }
 
 

@@ -106,7 +106,8 @@ export default function HomeNav({ currentPage }: HomeNavProps) {
               <div className="flex z-20 items-center space-x-3">
                 <Button
                   onClick={() => window.open('https://github.com/lak7/devildev', '_blank')}
-                  className="cursor-pointer h-9 w-9 p-0 flex items-center justify-center rounded-md"
+                  variant="ghost"
+                  className="cursor-pointer h-9 w-9 p-0 flex items-center justify-center rounded-md border border-white/20"
                 >
                   <Image
                     src="/github-mark-white.svg"
@@ -120,7 +121,7 @@ export default function HomeNav({ currentPage }: HomeNavProps) {
                 {user ? (
                   <>
                     <Link
-                      className="bg-white h-8 hidden md:flex items-center justify-center text-sm font-normal tracking-wide rounded-full text-black dark:text-secondary-foreground w-fit px-4 shadow-[inset_0_1px_2px_rgba(255,255,255,0.25),0_3px_3px_-1.5px_rgba(16,24,40,0.06),0_1px_1px_rgba(16,24,40,0.08)] border border-white/[0.12]"
+                      className="bg-white h-8 hidden md:flex items-center justify-center text-sm font-normal tracking-wide rounded-full text-black w-fit px-4 shadow-[inset_0_1px_2px_rgba(255,255,255,0.25),0_3px_3px_-1.5px_rgba(16,24,40,0.06),0_1px_1px_rgba(16,24,40,0.08)] border border-white/[0.12]"
                       href="/project"
                     >
                       Projects
@@ -169,7 +170,7 @@ export default function HomeNav({ currentPage }: HomeNavProps) {
                 ) : (
                   <>
                     <Link
-                      className="bg-white h-8 hidden md:flex items-center justify-center text-sm font-normal tracking-wide rounded-full text-black dark:text-secondary-foreground w-fit px-4 shadow-[inset_0_1px_2px_rgba(255,255,255,0.25),0_3px_3px_-1.5px_rgba(16,24,40,0.06),0_1px_1px_rgba(16,24,40,0.08)] border border-white/[0.12]"
+                      className="bg-white h-8 hidden md:flex items-center justify-center text-sm font-normal tracking-wide rounded-full text-black w-fit px-4 shadow-[inset_0_1px_2px_rgba(255,255,255,0.25),0_3px_3px_-1.5px_rgba(16,24,40,0.06),0_1px_1px_rgba(16,24,40,0.08)] border border-white/[0.12]"
                       href="/sign-in"
                     >
                       Login
