@@ -134,6 +134,7 @@ const ProjectPage = () => {
   const [isCharacterLimitReached, setIsCharacterLimitReached] = useState(false);
   const [showMaxChatsDialog, setShowMaxChatsDialog] = useState(false);
   const [showCharacterLimitDialog, setShowCharacterLimitDialog] = useState(false);
+  const [selectedPactType, setSelectedPactType] = useState<'bug' | 'task' | 'feature' | null>(null);
   // Panel resize state
   const [leftPanelWidth, setLeftPanelWidth] = useState(30);
   const [isResizing, setIsResizing] = useState(false);
@@ -441,6 +442,27 @@ const ProjectPage = () => {
       setOpenDynamicTabs(prev => [...prev, { id: tabType, label: labels[tabType] }]);
     }
     setActiveTab(tabType); // Switch to this tab
+  };
+
+  // Handler to select a pact type
+  const handlePactSelect = (tabType: 'bug' | 'tasks' | 'features') => {
+    const pactTypeMap: Record<string, 'bug' | 'task' | 'feature'> = {
+      bug: 'bug',
+      tasks: 'task',
+      features: 'feature'
+    };
+    
+    const pactType = pactTypeMap[tabType];
+    
+    // Toggle selection: if already selected, deselect it
+    if (selectedPactType === pactType) {
+      setSelectedPactType(null);
+    } else {
+      setSelectedPactType(pactType);
+    }
+    
+    // Always open the tab
+    handleOpenTab(tabType);
   };
 
   // Handler to close a dynamic tab
@@ -1521,6 +1543,8 @@ const ProjectPage = () => {
               onCopyPrompt={copyPrompt}
               onOpenTab={handleOpenTab}
               messagesEndRef={messagesEndRef}
+              selectedPactType={selectedPactType}
+              onPactSelect={handlePactSelect}
             />
 
             {/* Input Area */}
@@ -1533,6 +1557,8 @@ const ProjectPage = () => {
               onSubmit={handleSubmit}
               onOpenTab={handleOpenTab}
               showQuickActions={messages.length > 0}
+              selectedPactType={selectedPactType}
+              onPactSelect={handlePactSelect}
             />
           </div>
 
@@ -1736,6 +1762,8 @@ const ProjectPage = () => {
               onCopyPrompt={copyPrompt}
               onOpenTab={handleOpenTab}
               messagesEndRef={messagesEndRef}
+              selectedPactType={selectedPactType}
+              onPactSelect={handlePactSelect}
             />
 
             {/* Input Area - Only show for chat tab */}
@@ -1748,6 +1776,8 @@ const ProjectPage = () => {
               onSubmit={handleSubmit}
               onOpenTab={handleOpenTab}
               showQuickActions={messages.length > 0}
+              selectedPactType={selectedPactType}
+              onPactSelect={handlePactSelect}
             />
           </div>
         </div>
