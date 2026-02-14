@@ -54,6 +54,7 @@
     "@tiptap/extension-typography": "^3.11.1",
     "@tiptap/extension-unique-id": "^3.11.1",
     "@tiptap/extensions": "^3.11.1",
+    "@tiptap/markdown": "^3.19.0",
     "@tiptap/pm": "^3.11.1",
     "@tiptap/react": "^3.11.1",
     "@tiptap/suggestion": "^3.11.1",

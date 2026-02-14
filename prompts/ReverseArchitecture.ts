@@ -955,13 +955,13 @@ For **FEATURE** pacts:
 
 ## OUTPUT FORMAT
 You must return a structured JSON with exactly this format:
-{
+{{
   "shortResponse": "Brief summary under 200 words...",
-  "pact": {
+  "pact": {{
     "title": "Clear, actionable pact title",
     "body": "Detailed markdown content following the template above..."
-  }
-}
+}}
+}}
 
 Remember: Your goal is to create a pact so clear and comprehensive that any developer on the team can pick it up and implement it successfully.
 `
