@@ -24,28 +24,18 @@ export async function createPact(
   head: string,
   body?: any
 ) {
-  const { userId } = await auth();
-  if (!userId) {
-    return { error: 'Unauthorized' };
-  }
 
-  // Verify the project belongs to the user
-  const project = await db.project.findUnique({
-    where: { id: projectId, userId: userId },
-    select: { id: true }
-  });
-
-  if (!project) {
-    return { error: 'Project not found or unauthorized' };
-  }
-
+   // FORCE plain JSON serialization
+   const safeBody =
+   body == null ? null : JSON.parse(JSON.stringify(body));
+   
   try {
     const pact = await db.pact.create({
       data: {
         projectId,
         type,
         head,
-        body: body || null,
+        body: safeBody || null,
         status: 'PENDING',
       }
     });

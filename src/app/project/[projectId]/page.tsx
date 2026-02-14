@@ -1272,7 +1272,7 @@ const ProjectPage = () => {
           
           // Convert markdown body to Tiptap JSON
           const tiptapBody = convertMarkdownToTiptapJson(pactBotResponse.pact.body);
-          
+
           // Create the pact
           const createResult = await createPact(
             projectId,
@@ -1280,14 +1280,11 @@ const ProjectPage = () => {
             pactBotResponse.pact.title,
             tiptapBody
           );
-          
           if (createResult.success && createResult.pact) {
             // Refresh pacts for this type
             await handlePactCreated(pactType);
-            
             // Open the created pact
             setSelectedPact(createResult.pact);
-            
             // Switch to appropriate tab
             const tabMapping: Record<string, 'bug' | 'tasks' | 'features'> = {
               'BUG': 'bug',
@@ -1295,7 +1292,6 @@ const ProjectPage = () => {
               'FEATURE': 'features'
             };
             handleOpenTab(tabMapping[pactType]);
-            
             // Clear pact selection so next message is regular chat
             setSelectedPactType(null);
           } else {

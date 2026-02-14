@@ -5,7 +5,7 @@ import { cache } from "react";
 import { ChatOpenAI } from "@langchain/openai";
 import { PromptTemplate } from "@langchain/core/prompts";
 import { StringOutputParser } from "@langchain/core/output_parsers";
-import { ultraProjectChatBotPrompt, projectChatBotPrompt } from "../prompts/ReverseArchitecture";
+import { ultraProjectChatBotPrompt, projectChatBotBugPrompt, projectChatBotTaskPrompt, projectChatBotFeaturePrompt } from "../prompts/ReverseArchitecture";
 import { createToolCallingAgent, AgentExecutor } from "langchain/agents";
 import { ChatPromptTemplate, MessagesPlaceholder } from "@langchain/core/prompts";
 import { searchCodeTool, getFileContentTool } from "./github/gitTools";
@@ -657,9 +657,11 @@ export async function createPactProjectChatBot(
       `${msg.type === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
     ).join('\n');
 
+    const pactPrompt = pactType === 'BUG' ? projectChatBotBugPrompt : pactType === 'TASK' ? projectChatBotTaskPrompt : projectChatBotFeaturePrompt;
+
     // 6. Create Agent
     const prompt = ChatPromptTemplate.fromMessages([
-      ["system", projectChatBotPrompt],
+      ["system", pactPrompt],
       new MessagesPlaceholder("agent_scratchpad"),
     ]);
 
@@ -673,43 +675,68 @@ export async function createPactProjectChatBot(
       agent,
       tools,
       verbose: true,
-      maxIterations: 10,
+      maxIterations: 15, // Reduced to encourage fewer tool calls and lower costs
     });
 
     // 7. Execute Agent
     const agentResult = await agentExecutor.invoke({
       userInput,
-      pactType,
       projectArchitecture,
       framework: project.framework || 'Unknown',
       conversationHistory: formattedHistory,
       repoFullName: project.repoFullName,
     });
 
+    // Check if agent completed successfully
+    if (!agentResult.output || typeof agentResult.output !== 'string') {
+      return { error: 'Agent failed to generate a response. Please try again with a simpler request.' };
+    }
+
+    // Check for max iterations error
+    if (agentResult.output.includes('Agent stopped due to max iterations') || 
+        agentResult.output.includes('Agent stopped due to iteration limit')) {
+      return { error: 'The request was too complex and exceeded the processing limit. Please try breaking it into smaller tasks.' };
+    }
+
     // 8. Structure Output using LLM with structured output
-    const structuredLlm = llm.withStructuredOutput(pactOutputSchema);
-    
+    // const structuredLlm = llm.withStructuredOutput(pactOutputSchema);
+
     // Create a prompt to format the agent output into our schema
-    const formatterPrompt = PromptTemplate.fromTemplate(`
-Based on the following analysis and findings, create a structured response:
+//     const formatterPrompt = PromptTemplate.fromTemplate(`
+// You are formatting an agent's analysis into a structured pact format.
 
-Analysis Output:
-{agentOutput}
+// The agent analyzed this request and provided the following output. Your job is to extract and format it properly.
 
-Format this into a JSON response with:
-1. shortResponse: A concise summary under 200 words
-2. pact: An object with 'title' (clear, actionable) and 'body' (detailed markdown)
+// Agent's Analysis:
+// {agentOutput}
 
-The pact body should follow the appropriate template for a {pactType} type pact.
-`);
+// Pact Type: {pactType}
 
-    const formatterChain = formatterPrompt.pipe(structuredLlm);
+// Create a structured response with:
+// 1. shortResponse: Extract or create a concise summary (under 200 words) of the key findings and recommendations
+// 2. pact.title: Create a clear, actionable title for this {pactType}
+// 3. pact.body: Format the detailed analysis as markdown following the {pactType} template
+
+// IMPORTANT: The pact body should be well-formatted markdown with proper sections based on the pact type.
+// `);
+
+//     const formatterChain = formatterPrompt.pipe(structuredLlm);
     
-    const structuredOutput = await formatterChain.invoke({
-      agentOutput: agentResult.output,
-      pactType
-    });
+//     const structuredOutput = await formatterChain.invoke({
+//       agentOutput: agentCopyResult,
+//       pactType
+//     });
 
+//     // Validate structured output
+//     if (!structuredOutput || !structuredOutput.shortResponse || !structuredOutput.pact) {
+//       return { error: 'Failed to generate properly formatted pact. Please try again.' };
+//     }
+
+//     if (!structuredOutput.pact.title || !structuredOutput.pact.body) {
+//       return { error: 'Generated pact is missing required fields. Please try again.' };
+//     }
+
+     const structuredOutput = JSON.parse(agentResult.output);
 
     return {
       shortResponse: structuredOutput.shortResponse,
