@@ -59,6 +59,7 @@ const statusConfig = {
 
 export default function PactList({ pacts, pactType, onSelectPact }: PactListProps) {
   const [createIssueOpen, setCreateIssueOpen] = useState(false);
+  const [pactForIssue, setPactForIssue] = useState<Pact | null>(null);
   const config = pactConfig[pactType as keyof typeof pactConfig];
   const Icon = config.icon;
 
@@ -104,6 +105,7 @@ export default function PactList({ pacts, pactType, onSelectPact }: PactListProp
               <button
                 onClick={(e) => {
                   e.stopPropagation();
+                  setPactForIssue(pact);
                   setCreateIssueOpen(true);
                 }}
                 className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-gray-800/50 border border-gray-600 hover:border-gray-500 rounded transition-colors cursor-pointer"
@@ -115,7 +117,16 @@ export default function PactList({ pacts, pactType, onSelectPact }: PactListProp
           </div>
         </div>
       ))}
-      <CreateIssueDialog open={createIssueOpen} onOpenChange={setCreateIssueOpen} />
+      <CreateIssueDialog 
+        open={createIssueOpen} 
+        onOpenChange={(open) => {
+          setCreateIssueOpen(open);
+          if (!open) {
+            setPactForIssue(null);
+          }
+        }} 
+        pact={pactForIssue}
+      />
     </div>
   );
 }

@@ -517,7 +517,12 @@ export default function PactDetailView({ pact, pactType, onBack, onUpdate, onDel
           )}
         </div>
       )}
-      <CreateIssueDialog open={createIssueOpen} onOpenChange={setCreateIssueOpen} />
+      <CreateIssueDialog 
+        open={createIssueOpen} 
+        onOpenChange={setCreateIssueOpen} 
+        pact={pact}
+        onSuccess={onUpdate}
+      />
     </div>
   );
 }

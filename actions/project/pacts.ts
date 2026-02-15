@@ -2,6 +2,8 @@
 import { db } from "@/lib/db";
 import { auth } from "@clerk/nextjs/server";
 import { cache } from "react";
+import { getInstallationToken } from "../githubAppAuth";
+import { createOctokitWithToken } from "@/lib/githubClient";
 
 export type PactType = 'BUG' | 'TASK' | 'FEATURE';
 export type PactStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
@@ -173,3 +175,92 @@ export const getPactsByProject = cache(async (projectId: string, type?: PactType
     return { error: 'Failed to fetch pacts' };
   }
 });
+
+/**
+ * Create a GitHub issue for a pact
+ */
+export async function createGithubIssueForPact(
+  pactId: string,
+  issueData: {
+    title: string;
+    body: string;
+    labels: string[];
+  }
+) {
+  const { userId } = await auth();
+  if (!userId) {
+    return { error: 'Unauthorized' };
+  }
+
+  // 1. Fetch pact + project with auth check
+  const pact = await db.pact.findUnique({
+    where: { id: pactId },
+    include: { 
+      project: { 
+        select: { 
+          userId: true, 
+          repoFullName: true, 
+          githubInstallationId: true 
+        } 
+      } 
+    }
+  });
+
+  if (!pact || pact.project.userId !== userId) {
+    return { error: 'Pact not found or unauthorized' };
+  }
+
+  // 2. Check if issue already exists
+  if (pact.githubIssue) {
+    return { error: 'Issue already created for this pact' };
+  }
+
+  // 3. Validate project has GitHub connection
+  if (!pact.project.repoFullName || !pact.project.githubInstallationId) {
+    return { error: 'Project not connected to GitHub repository' };
+  }
+
+  // 4. Get installation token
+  try {
+    const { token } = await getInstallationToken(pact.project.githubInstallationId);
+
+    // 5. Parse owner/repo
+    const [owner, repo] = pact.project.repoFullName.split('/');
+
+    // 6. Create GitHub issue using Octokit
+    const octokit = createOctokitWithToken(token);
+    
+    const issue = await octokit.issues.create({
+      owner,
+      repo,
+      title: issueData.title,
+      body: issueData.body,
+      labels: issueData.labels,
+    });
+
+    // 7. Store issue metadata in pact.githubIssue
+    const githubIssueData = {
+      id: issue.data.id,
+      number: issue.data.number,
+      url: issue.data.html_url,
+      state: issue.data.state,
+      createdAt: issue.data.created_at,
+    };
+
+    const updatedPact = await db.pact.update({
+      where: { id: pactId },
+      data: { githubIssue: githubIssueData }
+    });
+
+    return { 
+      success: true, 
+      issue: githubIssueData,
+      pact: updatedPact 
+    };
+  } catch (error: any) {
+    console.error('GitHub API error:', error);
+    return { 
+      error: `Failed to create GitHub issue: ${error.message || 'Unknown error'}` 
+    };
+  }
+}
