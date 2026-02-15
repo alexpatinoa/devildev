@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.3.1
+### Added
+- Now Pacts can be created via ChatBot
+- Pacts can be used to directly create an issue on github
+
 ## v0.3.0
 ### Added
 - Pacts for tracking bugs, tasks, and features within projects

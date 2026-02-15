@@ -5,8 +5,17 @@ import { cache } from "react";
 import { ChatOpenAI } from "@langchain/openai";
 import { PromptTemplate } from "@langchain/core/prompts";
 import { StringOutputParser } from "@langchain/core/output_parsers";
-import { ultraProjectChatBotPrompt } from "../prompts/ReverseArchitecture";
+import { ultraProjectChatBotPrompt, projectChatBotBugPrompt, projectChatBotTaskPrompt, projectChatBotFeaturePrompt } from "../prompts/ReverseArchitecture";
+import { createToolCallingAgent, AgentExecutor } from "langchain/agents";
+import { ChatPromptTemplate, MessagesPlaceholder } from "@langchain/core/prompts";
+import { searchCodeTool, getFileContentTool } from "./github/gitTools";
+import { getInstallationToken } from "./githubAppAuth";
+import Parallel from "parallel-web";
+import { DynamicStructuredTool } from "langchain/tools";
+import { z } from "zod";
 const openaiKey = process.env.OPENAI_API_KEY;
+const parallelApiKey = process.env.PARALLEL_API_KEY;
+
 const llm = new ChatOpenAI({
   openAIApiKey: openaiKey,
   model: "gpt-5-mini-2025-08-07" 
@@ -18,6 +27,89 @@ const llm2 = new ChatOpenAI({
 })
 const tool = {"type": "web_search_preview"}
 const llmWithWeb = llm2.bindTools([tool])
+
+// Output schema for createPactProjectChatBot
+const pactOutputSchema = {
+  type: "object",
+  description: "Structured output containing a short response and pact details",
+  properties: {
+    shortResponse: {
+      type: "string",
+      description: "A concise response under 200 words explaining the analysis and recommendations"
+    },
+    pact: {
+      type: "object",
+      description: "The pact details with title and body",
+      properties: {
+        title: {
+          type: "string",
+          description: "Clear, actionable pact title"
+        },
+        body: {
+          type: "string",
+          description: "Detailed pact description in markdown format with context, approach, acceptance criteria, and code references"
+        }
+      },
+      required: ["title", "body"]
+    }
+  },
+  required: ["shortResponse", "pact"]
+};
+
+// Parallel Web Search Tool
+const createParallelWebSearchTool = () => {
+  const parallelClient = new Parallel({ apiKey: parallelApiKey });
+  
+  return new DynamicStructuredTool({
+    name: "parallelWebSearch",
+    description: "Search the web for documentation, best practices, or external context related to React/Next.js development. Useful for finding latest information, framework documentation, or solutions to common problems.",
+    schema: z.object({
+      objective: z.string().describe("Clear objective describing what information you're looking for"),
+      searchQueries: z.array(z.string()).describe("Array of specific search queries to execute"),
+      maxResults: z.number().optional().default(10).describe("Maximum number of results to return per query (default: 10)")
+    }),
+    
+    func: async (input): Promise<string> => {
+      const { objective, searchQueries, maxResults } = input as { 
+        objective: string, 
+        searchQueries: string[], 
+        maxResults?: number 
+      };
+      
+      try {
+        const searchResult = await parallelClient.beta.search({
+          objective,
+          search_queries: searchQueries,
+          max_results: maxResults || 10,
+          max_chars_per_result: 5000
+        });
+        
+        if (!searchResult.results || searchResult.results.length === 0) {
+          return `No web search results found for objective: "${objective}"`;
+        }
+        
+        // Format results for better readability
+        const formattedResults = searchResult.results.map((result, idx) => {
+          const resultAny = result as any;
+          return `Result ${idx + 1}:
+Title: ${result.title || 'N/A'}
+URL: ${result.url || 'N/A'}
+Content: ${resultAny.content ? resultAny.content.substring(0, 1000) : resultAny.text ? resultAny.text.substring(0, 1000) : 'No content'}
+---`;
+        }).join('\n\n');
+        
+        return `Web Search Results for "${objective}":
+        
+Total results: ${searchResult.results.length}
+
+${formattedResults}`;
+        
+      } catch (error) {
+        return `Error performing web search: ${error instanceof Error ? error.message : "Unknown error occurred"}`;
+      }
+    }
+  });
+};
 
 export interface ProjectMessage {
     id: string;
@@ -95,11 +187,6 @@ export async function saveProjectArchitecture(
         beforeCommitHash?: string;
     }
 ) {
-    ;
-
-
-    ;
-
     try {
         // First verify the project belongs to the user
         const project = await db.project.findUnique({
@@ -450,8 +537,230 @@ export async function projectChatBot( userInput: string, projectFramework: strin
     return response;
 }
 
-export async function createPactProjectChatBot() {
+export async function createPactProjectChatBot(
+  projectId: string,
+  userInput: string,
+  pactType: 'BUG' | 'TASK' | 'FEATURE',
+  conversationHistory: any[]
+): Promise<{ shortResponse: string; pact: { title: string; body: string } } | { error: string }> {
+  try {
+    // 1. Authentication & Authorization
+    const { userId } = await auth();
+    if (!userId) {
+      return { error: 'Unauthorized' };
+    }
 
+    // 2. Fetch Project Data
+    const project = await db.project.findUnique({
+      where: { id: projectId, userId: userId },
+      select: {
+        id: true,
+        name: true,
+        repoFullName: true,
+        githubInstallationId: true,
+        defaultBranch: true,
+        framework: true,
+        ProjectArchitecture: {
+          orderBy: {
+            createdAt: 'desc',
+          },
+          take: 1,
+        },
+      },
+    });
+
+    if (!project) {
+      return { error: 'Project not found' };
+    }
+
+    if (!project.repoFullName) {
+      return { error: 'Project repository not configured' };
+    }
+
+    if (!project.githubInstallationId) {
+      return { error: 'GitHub installation not configured for this project' };
+    }
+
+    // 3. Get GitHub Access Token
+    const installationTokenResult = await getInstallationToken(project.githubInstallationId);
+    const accessToken = installationTokenResult.token;
+
+    // Extract owner and repo from repoFullName
+    const [owner, repo] = project.repoFullName.split('/');
+    if (!owner || !repo) {
+      return { error: 'Invalid repository name format' };
+    }
+
+    // Get latest architecture
+    const latestArchitecture = project.ProjectArchitecture && project.ProjectArchitecture.length > 0
+      ? project.ProjectArchitecture[0]
+      : null;
+
+    const projectArchitecture = latestArchitecture 
+      ? JSON.stringify({
+          components: latestArchitecture.components,
+          rationale: latestArchitecture.architectureRationale
+        })
+      : 'No architecture available';
+
+    // 4. Initialize Tools
+    const parallelWebSearchTool = createParallelWebSearchTool();
+    
+    // We need to bind the GitHub tools with the specific parameters
+    // Create bound versions of the tools
+    const boundSearchCodeTool = new DynamicStructuredTool({
+      name: "searchCode",
+      description: searchCodeTool.description,
+      schema: z.object({
+        query: z.string().describe("Search query (e.g., 'useEffect', '@nestjs/', 'function component')"),
+        language: z.string().optional().describe("Filter by programming language (e.g., 'typescript', 'javascript')"),
+        extension: z.string().optional().describe("Filter by file extension (e.g., 'ts', 'tsx', 'js')"),
+        path: z.string().optional().describe("Filter by file path pattern (e.g., 'src/', 'components/')"),
+      }),
+      func: async (input: any) => {
+        return await searchCodeTool.func({
+          ...input,
+          owner,
+          repo,
+          accessToken
+        });
+      }
+    });
+
+    const boundGetFileContentTool = new DynamicStructuredTool({
+      name: "getFileContent",
+      description: getFileContentTool.description,
+      schema: z.object({
+        path: z.string().describe("File path within the repository (e.g., 'src/app/page.tsx')"),
+        branch: z.string().optional().describe("Branch name (optional, uses default branch if not specified)"),
+      }),
+      func: async (input: any) => {
+        return await getFileContentTool.func({
+          ...input,
+          owner,
+          repo,
+          accessToken,
+          branch: input.branch || project.defaultBranch || 'main'
+        });
+      }
+    });
+
+    const tools = [boundSearchCodeTool, boundGetFileContentTool, parallelWebSearchTool];
+
+    // 5. Format Conversation History
+    const formattedHistory = conversationHistory.map(msg =>
+      `${msg.type === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
+    ).join('\n');
+
+    const pactPrompt = pactType === 'BUG' ? projectChatBotBugPrompt : pactType === 'TASK' ? projectChatBotTaskPrompt : projectChatBotFeaturePrompt;
+
+    // 6. Create Agent
+    const prompt = ChatPromptTemplate.fromMessages([
+      ["system", pactPrompt],
+      new MessagesPlaceholder("agent_scratchpad"),
+    ]);
+
+    const agent = await createToolCallingAgent({
+      llm,
+      tools,
+      prompt,
+    });
+
+    const agentExecutor = new AgentExecutor({
+      agent,
+      tools,
+      verbose: true,
+      maxIterations: 15, // Reduced to encourage fewer tool calls and lower costs
+    });
+
+    // 7. Execute Agent
+    const agentResult = await agentExecutor.invoke({
+      userInput,
+      projectArchitecture,
+      framework: project.framework || 'Unknown',
+      conversationHistory: formattedHistory,
+      repoFullName: project.repoFullName,
+    });
+
+    // Check if agent completed successfully
+    if (!agentResult.output || typeof agentResult.output !== 'string') {
+      return { error: 'Agent failed to generate a response. Please try again with a simpler request.' };
+    }
+
+    // Check for max iterations error
+    if (agentResult.output.includes('Agent stopped due to max iterations') || 
+        agentResult.output.includes('Agent stopped due to iteration limit')) {
+      return { error: 'The request was too complex and exceeded the processing limit. Please try breaking it into smaller tasks.' };
+    }
+
+    // 8. Structure Output using LLM with structured output
+    // const structuredLlm = llm.withStructuredOutput(pactOutputSchema);
+
+    // Create a prompt to format the agent output into our schema
+//     const formatterPrompt = PromptTemplate.fromTemplate(`
+// You are formatting an agent's analysis into a structured pact format.
+
+// The agent analyzed this request and provided the following output. Your job is to extract and format it properly.
+
+// Agent's Analysis:
+// {agentOutput}
+
+// Pact Type: {pactType}
+
+// Create a structured response with:
+// 1. shortResponse: Extract or create a concise summary (under 200 words) of the key findings and recommendations
+// 2. pact.title: Create a clear, actionable title for this {pactType}
+// 3. pact.body: Format the detailed analysis as markdown following the {pactType} template
+
+// IMPORTANT: The pact body should be well-formatted markdown with proper sections based on the pact type.
+// `);
+
+//     const formatterChain = formatterPrompt.pipe(structuredLlm);
+    
+//     const structuredOutput = await formatterChain.invoke({
+//       agentOutput: agentCopyResult,
+//       pactType
+//     });
+
+//     // Validate structured output
+//     if (!structuredOutput || !structuredOutput.shortResponse || !structuredOutput.pact) {
+//       return { error: 'Failed to generate properly formatted pact. Please try again.' };
+//     }
+
+//     if (!structuredOutput.pact.title || !structuredOutput.pact.body) {
+//       return { error: 'Generated pact is missing required fields. Please try again.' };
+//     }
+
+     const structuredOutput = JSON.parse(agentResult.output);
+
+    return {
+      shortResponse: structuredOutput.shortResponse,
+      pact: {
+        title: structuredOutput.pact.title,
+        body: structuredOutput.pact.body
+      }
+    };
+
+  } catch (error) {
+    console.error('Error in createPactProjectChatBot:', error);
+    
+    // Handle specific error types
+    if (error instanceof Error) {
+      if (error.message.includes('rate limit')) {
+        return { error: 'GitHub API rate limit exceeded. Please try again later.' };
+      }
+      if (error.message.includes('authentication')) {
+        return { error: 'GitHub authentication failed. Please reconnect your repository.' };
+      }
+      if (error.message.includes('timeout')) {
+        return { error: 'Request timeout. The operation took too long. Please try again.' };
+      }
+      
+      return { error: `Failed to generate pact: ${error.message}` };
+    }
+    
+    return { error: 'An unexpected error occurred while generating the pact' };
+  }
 }
 
 

@@ -13,6 +13,8 @@ interface ChatMessageListProps {
   onCopyPrompt: (messageId: string, prompt: string) => void;
   onOpenTab?: (tabType: 'bug' | 'tasks' | 'features') => void;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
+  selectedPactType?: 'bug' | 'task' | 'feature' | null;
+  onPactSelect?: (tabType: 'bug' | 'tasks' | 'features') => void;
 }
 
 export const ChatMessageList: React.FC<ChatMessageListProps> = ({
@@ -24,6 +26,8 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   onCopyPrompt,
   onOpenTab,
   messagesEndRef,
+  selectedPactType,
+  onPactSelect,
 }) => {
   const showEmptyState = messages.length === 0 && !isChatLoading;
 
@@ -36,8 +40,12 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
             {/* Top Row - Bug and Tasks buttons (square) */}
             <div className="flex gap-4 mb-4">
               <button
-                onClick={() => onOpenTab?.('bug')}
-                className="flex-1 aspect-square gap-2.5 cursor-pointer bg-gradient-to-br from-slate-800/40 to-slate-900/40 border border-slate-700/50 rounded-2xl hover:border-slate-600/70 hover:bg-gradient-to-br hover:from-slate-800/60 hover:to-slate-900/60 transition-all duration-300 group flex flex-col justify-start p-5"
+                onClick={() => onPactSelect?.('bug')}
+                className={`flex-1 aspect-square gap-2.5 cursor-pointer bg-gradient-to-br from-slate-800/40 to-slate-900/40 rounded-2xl hover:bg-gradient-to-br hover:from-slate-800/60 hover:to-slate-900/60 transition-all duration-300 group flex flex-col justify-start p-5 relative ${
+                  selectedPactType === 'bug' 
+                    ? 'border-2 border-red-500' 
+                    : 'border border-slate-700/50 hover:border-slate-600/70'
+                }`}
               >
                 <div className="flex items-start gap-1.5">
                   <div className="p-1 bg-slate-700/50 rounded-sm group-hover:bg-slate-700/70 transition-colors duration-300 flex-shrink-0">
@@ -49,8 +57,12 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
               </button>
 
               <button
-                onClick={() => onOpenTab?.('tasks')}
-                className="flex-1 aspect-square gap-2 cursor-pointer bg-gradient-to-br from-slate-800/40 to-slate-900/40 border border-slate-700/50 rounded-2xl hover:border-slate-600/70 hover:bg-gradient-to-br hover:from-slate-800/60 hover:to-slate-900/60 transition-all duration-300 group flex flex-col justify-start p-5"
+                onClick={() => onPactSelect?.('tasks')}
+                className={`flex-1 aspect-square gap-2 cursor-pointer bg-gradient-to-br from-slate-800/40 to-slate-900/40 rounded-2xl hover:bg-gradient-to-br hover:from-slate-800/60 hover:to-slate-900/60 transition-all duration-300 group flex flex-col justify-start p-5 relative ${
+                  selectedPactType === 'task' 
+                    ? 'border-2 border-blue-500' 
+                    : 'border border-slate-700/50 hover:border-slate-600/70'
+                }`}
               >
                 <div className="flex items-start gap-1.5">
                   <div className="p-1 bg-slate-700/50 rounded-sm group-hover:bg-slate-700/70 transition-colors duration-300 flex-shrink-0">
@@ -64,8 +76,12 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
 
             {/* Bottom Row - Features button (rectangle) */}
             <button
-              onClick={() => onOpenTab?.('features')}
-              className="w-full h-[calc(50%-0.5rem)] gap-2.5 cursor-pointer bg-gradient-to-br from-slate-800/40 to-slate-900/40 border border-slate-700/50 rounded-2xl hover:border-slate-600/70 hover:bg-gradient-to-br hover:from-slate-800/60 hover:to-slate-900/60 transition-all duration-300 group flex flex-col justify-start p-5"
+              onClick={() => onPactSelect?.('features')}
+              className={`w-full h-[calc(50%-0.5rem)] gap-2.5 cursor-pointer bg-gradient-to-br from-slate-800/40 to-slate-900/40 rounded-2xl hover:bg-gradient-to-br hover:from-slate-800/60 hover:to-slate-900/60 transition-all duration-300 group flex flex-col justify-start p-5 relative ${
+                selectedPactType === 'feature' 
+                  ? 'border-2 border-purple-500' 
+                  : 'border border-slate-700/50 hover:border-slate-600/70'
+              }`}
             >
               <div className="flex items-start gap-1.5">
                 <div className="p-1 bg-slate-700/50 rounded-sm group-hover:bg-slate-700/70 transition-colors duration-300 flex-shrink-0">

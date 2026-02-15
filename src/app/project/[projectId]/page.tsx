@@ -5,13 +5,14 @@ import Image from 'next/image';
 import { useParams, useRouter } from "next/navigation";
 import { Maximize, X, Menu, MessageCircle, Plus, Loader2, MessageSquare, BrainCircuit, FolderKanban, ChevronDown, ChevronRight, Folder, FolderOpen, File, Bug, ListTodo, Sparkles, GripVertical } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { getProject, updateProjectComponentPositions, ProjectMessage, projectChatBot, createProjectChat, getProjectChat, addMessageToProjectChat } from "../../../../actions/project";
+import { getProject, updateProjectComponentPositions, ProjectMessage, projectChatBot, createProjectChat, getProjectChat, addMessageToProjectChat, createPactProjectChatBot } from "../../../../actions/project";
 import { SignOutButton, useUser } from '@clerk/nextjs';
 import { ChatMessageList, ChatInput, ChatHeader } from '@/components/Project';
 import PactDetailView from '@/components/Project/PactDetailView';
-import { getPactsByProject, Pact, PactType } from "../../../../actions/project/pacts";
+import { getPactsByProject, Pact, PactType, createPact } from "../../../../actions/project/pacts";
 import PactCreationForm from '@/components/Project/PactCreationForm';
 import PactList from '@/components/Project/PactList';
+import { convertMarkdownToTiptapJson } from '@/lib/markdown-to-tiptap';
 import { triggerReverseArchitectureGeneration, checkProjectArchitectureByGenerationId, checkPendingArchitectureUpdate, triggerPendingArchitectureRegeneration } from '../../../../actions/reverse-architecture';
 import RevArchitecture from '@/components/core/revArchitecture';
 import { ProjectPageSkeleton } from '@/components/ui/project-skeleton';
@@ -134,6 +135,7 @@ const ProjectPage = () => {
   const [isCharacterLimitReached, setIsCharacterLimitReached] = useState(false);
   const [showMaxChatsDialog, setShowMaxChatsDialog] = useState(false);
   const [showCharacterLimitDialog, setShowCharacterLimitDialog] = useState(false);
+  const [selectedPactType, setSelectedPactType] = useState<'bug' | 'task' | 'feature' | null>(null);
   // Panel resize state
   const [leftPanelWidth, setLeftPanelWidth] = useState(30);
   const [isResizing, setIsResizing] = useState(false);
@@ -441,6 +443,27 @@ const ProjectPage = () => {
       setOpenDynamicTabs(prev => [...prev, { id: tabType, label: labels[tabType] }]);
     }
     setActiveTab(tabType); // Switch to this tab
+  };
+
+  // Handler to select a pact type
+  const handlePactSelect = (tabType: 'bug' | 'tasks' | 'features') => {
+    const pactTypeMap: Record<string, 'bug' | 'task' | 'feature'> = {
+      bug: 'bug',
+      tasks: 'task',
+      features: 'feature'
+    };
+    
+    const pactType = pactTypeMap[tabType];
+    
+    // Toggle selection: if already selected, deselect it
+    if (selectedPactType === pactType) {
+      setSelectedPactType(null);
+    } else {
+      setSelectedPactType(pactType);
+    }
+    
+    // Always open the tab
+    handleOpenTab(tabType);
   };
 
   // Handler to close a dynamic tab
@@ -1174,39 +1197,116 @@ const ProjectPage = () => {
         );
       }   
 
-      const chatbotResponse = await projectChatBot(
-        currentInput.trim(),
-        project.framework,
-        messages,
-        architectureData,
-      );
+      // ROUTE BASED ON selectedPactType
+      if (selectedPactType === null) {
+        // EXISTING FLOW: Regular chatbot
+        const chatbotResponse = await projectChatBot(
+          currentInput.trim(),
+          project.framework,
+          messages,
+          architectureData,
+        );
 
-      // Ensure we always end up with a plain text assistant response
-      let assistantContent: string;
-      if (typeof chatbotResponse === 'string') {
-        const trimmed = chatbotResponse.trim();
-        const cleaned = trimmed.replace(/^```[\s\S]*?```$/g, '').trim();
-        assistantContent = cleaned || trimmed;
-      } else if (chatbotResponse && 'error' in chatbotResponse) {
-        assistantContent = `Sorry, there was an error: ${chatbotResponse.error}`;
+        // Ensure we always end up with a plain text assistant response
+        let assistantContent: string;
+        if (typeof chatbotResponse === 'string') {
+          const trimmed = chatbotResponse.trim();
+          const cleaned = trimmed.replace(/^```[\s\S]*?```$/g, '').trim();
+          assistantContent = cleaned || trimmed;
+        } else if (chatbotResponse && 'error' in chatbotResponse) {
+          assistantContent = `Sorry, there was an error: ${chatbotResponse.error}`;
+        } else {
+          assistantContent = 'Sorry, there was an issue generating a response.';
+        }
+
+        // For now, just add a simple response
+        const assistantMessage: ProjectMessage = {
+          id: generateMessageId(), 
+          type: 'assistant',
+          content: assistantContent,
+          timestamp: new Date().toISOString()
+        };
+
+        // Add assistant message to local state
+        setMessages(prevMessages => [...prevMessages, assistantMessage]);
+        setIsChatLoading(false);
+        
+        // Save assistant message to database
+        await addMessageToProjectChat(projectId, activeChatId, assistantMessage);
       } else {
-        assistantContent = 'Sorry, there was an issue generating a response.';
+        // NEW FLOW: Pact creation chatbot
+        const pactTypeMapping: Record<string, 'BUG' | 'TASK' | 'FEATURE'> = {
+          'bug': 'BUG',
+          'task': 'TASK',
+          'feature': 'FEATURE'
+        };
+        const pactType = pactTypeMapping[selectedPactType];
+        
+        const pactBotResponse = await createPactProjectChatBot(
+          projectId,
+          currentInput.trim(),
+          pactType,
+          messages
+        );
+        
+        if ('error' in pactBotResponse) {
+          // Handle error
+          const errorMessage: ProjectMessage = {
+            id: generateMessageId(),
+            type: 'assistant',
+            content: `Error creating pact: ${pactBotResponse.error}`,
+            timestamp: new Date().toISOString()
+          };
+          setMessages(prev => [...prev, errorMessage]);
+          await addMessageToProjectChat(projectId, activeChatId, errorMessage);
+        } else {
+          // SUCCESS: Display short response in chat
+          const assistantMessage: ProjectMessage = {
+            id: generateMessageId(),
+            type: 'assistant',
+            content: pactBotResponse.shortResponse,
+            timestamp: new Date().toISOString()
+          };
+          setMessages(prev => [...prev, assistantMessage]);
+          await addMessageToProjectChat(projectId, activeChatId, assistantMessage);
+          
+          // Convert markdown body to Tiptap JSON
+          const tiptapBody = convertMarkdownToTiptapJson(pactBotResponse.pact.body);
+
+          // Create the pact
+          const createResult = await createPact(
+            projectId,
+            pactType,
+            pactBotResponse.pact.title,
+            tiptapBody
+          );
+          if (createResult.success && createResult.pact) {
+            // Refresh pacts for this type
+            await handlePactCreated(pactType);
+            // Open the created pact
+            setSelectedPact(createResult.pact);
+            // Switch to appropriate tab
+            const tabMapping: Record<string, 'bug' | 'tasks' | 'features'> = {
+              'BUG': 'bug',
+              'TASK': 'tasks',
+              'FEATURE': 'features'
+            };
+            handleOpenTab(tabMapping[pactType]);
+            // Clear pact selection so next message is regular chat
+            setSelectedPactType(null);
+          } else {
+            // Handle pact creation failure
+            const errorMessage: ProjectMessage = {
+              id: generateMessageId(),
+              type: 'assistant',
+              content: 'Pact was generated but failed to save. Please try again.',
+              timestamp: new Date().toISOString()
+            };
+            setMessages(prev => [...prev, errorMessage]);
+            await addMessageToProjectChat(projectId, activeChatId, errorMessage);
+          }
+        }
       }
-
-      // For now, just add a simple response
-      const assistantMessage: ProjectMessage = {
-        id: generateMessageId(), 
-        type: 'assistant',
-        content: assistantContent,
-        timestamp: new Date().toISOString()
-      };
-
-      // Add assistant message to local state
-      setMessages(prevMessages => [...prevMessages, assistantMessage]);
-      setIsChatLoading(false);
-      
-      // Save assistant message to database
-      await addMessageToProjectChat(projectId, activeChatId, assistantMessage);
       
     } catch (error) {
       console.error('Error handling message:', error);
@@ -1521,6 +1621,8 @@ const ProjectPage = () => {
               onCopyPrompt={copyPrompt}
               onOpenTab={handleOpenTab}
               messagesEndRef={messagesEndRef}
+              selectedPactType={selectedPactType}
+              onPactSelect={handlePactSelect}
             />
 
             {/* Input Area */}
@@ -1533,6 +1635,8 @@ const ProjectPage = () => {
               onSubmit={handleSubmit}
               onOpenTab={handleOpenTab}
               showQuickActions={messages.length > 0}
+              selectedPactType={selectedPactType}
+              onPactSelect={handlePactSelect}
             />
           </div>
 
@@ -1736,6 +1840,8 @@ const ProjectPage = () => {
               onCopyPrompt={copyPrompt}
               onOpenTab={handleOpenTab}
               messagesEndRef={messagesEndRef}
+              selectedPactType={selectedPactType}
+              onPactSelect={handlePactSelect}
             />
 
             {/* Input Area - Only show for chat tab */}
@@ -1748,6 +1854,8 @@ const ProjectPage = () => {
               onSubmit={handleSubmit}
               onOpenTab={handleOpenTab}
               showQuickActions={messages.length > 0}
+              selectedPactType={selectedPactType}
+              onPactSelect={handlePactSelect}
             />
           </div>
         </div>
@@ -2003,7 +2111,7 @@ const ProjectPage = () => {
                       Add Bug
                     </Button>
                   </div>
-                  <PactList pacts={pactsCache.BUG} pactType="BUG" onSelectPact={setSelectedPact} />
+                  <PactList pacts={pactsCache.BUG} pactType="BUG" onSelectPact={setSelectedPact} onRefresh={() => handlePactUpdated('BUG')} />
                 </>
               ) : (
                 <PactCreationForm
@@ -2042,7 +2150,7 @@ const ProjectPage = () => {
                       Add Task
                     </Button>
                   </div>
-                  <PactList pacts={pactsCache.TASK} pactType="TASK" onSelectPact={setSelectedPact} />
+                  <PactList pacts={pactsCache.TASK} pactType="TASK" onSelectPact={setSelectedPact} onRefresh={() => handlePactUpdated('TASK')} />
                 </>
               ) : (
                 <PactCreationForm
@@ -2081,7 +2189,7 @@ const ProjectPage = () => {
                       Add Feature
                     </Button>
                   </div>
-                  <PactList pacts={pactsCache.FEATURE} pactType="FEATURE" onSelectPact={setSelectedPact} />
+                  <PactList pacts={pactsCache.FEATURE} pactType="FEATURE" onSelectPact={setSelectedPact} onRefresh={() => handlePactUpdated('FEATURE')} />
                 </>
               ) : (
                 <PactCreationForm
