@@ -1,9 +1,10 @@
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Bug, ListTodo, Sparkles } from 'lucide-react';
 import { Pact, PactType } from '../../../actions/project/pacts';
+import { CreateIssueDialog } from './CreateIssueDialog';
 
 interface PactListProps {
   pacts: Pact[];
@@ -57,10 +58,9 @@ const statusConfig = {
 };
 
 export default function PactList({ pacts, pactType, onSelectPact }: PactListProps) {
+  const [createIssueOpen, setCreateIssueOpen] = useState(false);
   const config = pactConfig[pactType as keyof typeof pactConfig];
   const Icon = config.icon;
-
-
 
   if (pacts.length === 0) {
     return (
@@ -101,24 +101,21 @@ export default function PactList({ pacts, pactType, onSelectPact }: PactListProp
                 {statusConfig[pact.status as keyof typeof statusConfig].label}
               </Badge>
               
-              {/* Action buttons (placeholder) */}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
+                  setCreateIssueOpen(true);
                 }}
-                className="p-1 text-gray-500 hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
-                title="More actions"
+                className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-gray-800/50 border border-gray-600 hover:border-gray-500 rounded transition-colors cursor-pointer"
+                title="Create Issue"
               >
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                  <circle cx="12" cy="5" r="2" />
-                  <circle cx="12" cy="12" r="2" />
-                  <circle cx="12" cy="19" r="2" />
-                </svg>
+                Create Issue
               </button>
             </div>
           </div>
         </div>
       ))}
+      <CreateIssueDialog open={createIssueOpen} onOpenChange={setCreateIssueOpen} />
     </div>
   );
 }

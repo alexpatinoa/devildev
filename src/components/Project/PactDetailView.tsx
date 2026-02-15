@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { ChevronLeft, Bug, ListTodo, Sparkles, Trash2, Edit, ChevronDown, Maximize, Minimize, Loader2, Save, X } from 'lucide-react';
+import { CreateIssueDialog } from './CreateIssueDialog';
 import { Pact, PactType, updatePact, updatePactStatus, deletePact, PactStatus } from '../../../actions/project/pacts';
 import { Editor, EditorContent, useEditor, EditorContext } from "@tiptap/react";
 import { RichTextEditor } from '@/components/tiptap/rich-text-editor';
@@ -142,6 +143,7 @@ export default function PactDetailView({ pact, pactType, onBack, onUpdate, onDel
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [error, setError] = useState('');
+  const [createIssueOpen, setCreateIssueOpen] = useState(false);
   const config = pactConfig[pactType as keyof typeof pactConfig];
   const Icon = config.icon;
 
@@ -335,6 +337,13 @@ export default function PactDetailView({ pact, pactType, onBack, onUpdate, onDel
 
           {/* Action Buttons */}
           <div className="flex items-center gap-1">
+            <button
+              onClick={() => setCreateIssueOpen(true)}
+              className="px-2.5 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800/50 border border-gray-600 hover:border-gray-500 rounded-lg transition-colors cursor-pointer"
+              title="Create Issue"
+            >
+              Create Issue
+            </button>
             {isEditing ? (
               <>
                 {/* Cancel Button */}
@@ -508,6 +517,7 @@ export default function PactDetailView({ pact, pactType, onBack, onUpdate, onDel
           )}
         </div>
       )}
+      <CreateIssueDialog open={createIssueOpen} onOpenChange={setCreateIssueOpen} />
     </div>
   );
 }

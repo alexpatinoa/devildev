@@ -187,11 +187,6 @@ export async function saveProjectArchitecture(
         beforeCommitHash?: string;
     }
 ) {
-    ;
-
-
-    ;
-
     try {
         // First verify the project belongs to the user
         const project = await db.project.findUnique({
