@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.3.0-blue" alt="Version 0.3.0" />
+  <img src="https://img.shields.io/badge/version-0.3.1-blue" alt="Version 0.3.1" />
    <img src="https://img.shields.io/badge/status-experimental-orange" alt="Status: Experimental" />
    <a href="https://opensource.org/licenses/Apache-2.0">
     <img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License: Apache 2.0" />
@@ -228,6 +228,9 @@ CLERK_WEBHOOK_SECRET=whsec_...
 
 # OpenAI API (Required)
 OPENAI_API_KEY=sk-...
+
+# Parallel API (Required)
+PARALLEL_API_KEY=your_parallel_api_key
 
 # Base URL (Required for local - use your ngrok URL)
 NEXT_PUBLIC_BASE_URL=https://your-ngrok-url.ngrok.io
