@@ -10,6 +10,7 @@ interface PactListProps {
   pacts: Pact[];
   pactType: PactType;
   onSelectPact?: (pact: Pact) => void;
+  onRefresh?: () => void;
 }
 
 const pactConfig = {
@@ -57,7 +58,7 @@ const statusConfig = {
   }
 };
 
-export default function PactList({ pacts, pactType, onSelectPact }: PactListProps) {
+export default function PactList({ pacts, pactType, onSelectPact, onRefresh }: PactListProps) {
   const [createIssueOpen, setCreateIssueOpen] = useState(false);
   const [pactForIssue, setPactForIssue] = useState<Pact | null>(null);
   const config = pactConfig[pactType as keyof typeof pactConfig];
@@ -126,6 +127,7 @@ export default function PactList({ pacts, pactType, onSelectPact }: PactListProp
           }
         }} 
         pact={pactForIssue}
+        onSuccess={onRefresh}
       />
     </div>
   );

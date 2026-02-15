@@ -3,7 +3,7 @@
 ## v0.3.1
 ### Added
 - Now Pacts can be created via ChatBot
-- Pacts can be used to direclty create an issue on github
+- Pacts can be used to directly create an issue on github
 
 ## v0.3.0
 ### Added

@@ -2111,7 +2111,7 @@ const ProjectPage = () => {
                       Add Bug
                     </Button>
                   </div>
-                  <PactList pacts={pactsCache.BUG} pactType="BUG" onSelectPact={setSelectedPact} />
+                  <PactList pacts={pactsCache.BUG} pactType="BUG" onSelectPact={setSelectedPact} onRefresh={() => handlePactUpdated('BUG')} />
                 </>
               ) : (
                 <PactCreationForm
@@ -2150,7 +2150,7 @@ const ProjectPage = () => {
                       Add Task
                     </Button>
                   </div>
-                  <PactList pacts={pactsCache.TASK} pactType="TASK" onSelectPact={setSelectedPact} />
+                  <PactList pacts={pactsCache.TASK} pactType="TASK" onSelectPact={setSelectedPact} onRefresh={() => handlePactUpdated('TASK')} />
                 </>
               ) : (
                 <PactCreationForm
@@ -2189,7 +2189,7 @@ const ProjectPage = () => {
                       Add Feature
                     </Button>
                   </div>
-                  <PactList pacts={pactsCache.FEATURE} pactType="FEATURE" onSelectPact={setSelectedPact} />
+                  <PactList pacts={pactsCache.FEATURE} pactType="FEATURE" onSelectPact={setSelectedPact} onRefresh={() => handlePactUpdated('FEATURE')} />
                 </>
               ) : (
                 <PactCreationForm
