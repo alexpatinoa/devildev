@@ -6,12 +6,14 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import 'highlight.js/styles/github-dark.css';
-import { Search, FileText, HelpCircle, Image as ImageIcon, Globe, Paperclip, Mic, BarChart3, SendHorizonal, Maximize, X, Menu, ChevronLeft, MessageCircle, Users, Phone, Info, Plus, Loader2, MessageSquare, Send, BrainCircuit, ChevronDown } from 'lucide-react';
+import {HelpCircle, Image as ImageIcon, SendHorizonal, Maximize, X, Menu, MessageCircle, Users, Phone, Plus, Loader2, MessageSquare, BrainCircuit, ChevronDown } from 'lucide-react';
 import Architecture from '@/components/core/architecture';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { startOrNot, firstBot, chatbot, architectureModificationBot } from '../../../../actions/agentsFlow';
+import SoulCount from '../../../components/core/SoulCount';
+import { chatbot, architectureModificationBot } from '../../../../actions/agentsFlow';
 import { submitFeedback } from '../../../../actions/feedback';
-import { generateArchitectureWithToolCalling, triggerArchitectureGeneration } from '../../../../actions/architecture'; 
+import { notifyCreditsUpdate, refetchCredits } from '@/lib/credits-events';
+import { triggerArchitectureGeneration } from '../../../../actions/architecture'; 
 import { getChat, addMessageToChat, updateChatMessages, createChatWithId, ChatMessage as ChatMessageType, getUserChats } from '../../../../actions/chat';
 import { 
   saveArchitecture, 
@@ -702,6 +704,12 @@ const DevPage = () => {
           
           setArchitectureGenerated(true);
           setIsArchitectureLoading(false);
+          
+          // Refetch credits after background job completes
+          if (user?.id) {
+            await refetchCredits(user.id);
+          }
+          
           return;
         }
         
@@ -730,8 +738,14 @@ const DevPage = () => {
     setIsLoading(true); 
     
     try {
-      const chatbotResponse = await chatbot(initialMessage, currentMessages);
-      // const isStart = await startOrNot(initialMessage, [], null);
+      const result = await chatbot(initialMessage, currentMessages, user?.id ?? null);
+      
+      // Notify credits update if available
+      if (typeof result === 'object' && result.remainingCredits !== undefined) {
+        notifyCreditsUpdate(result.remainingCredits);
+      }
+      
+      const chatbotResponse = typeof result === 'string' ? result : result.textContent;
       let cleanedIsStart = chatbotResponse;
       
       const parsedClassifier = safeJsonParse(cleanedIsStart);  
@@ -815,7 +829,14 @@ const DevPage = () => {
     if(architectureData){
       setIsArchitectureGeneratedOnce(true);
       try {
-        const chatbotResponse = await architectureModificationBot(currentInput, messages, architectureData);
+        const result = await architectureModificationBot(currentInput, messages, architectureData, user?.id ?? null);
+        
+        // Notify credits update if available
+        if (typeof result === 'object' && result.remainingCredits !== undefined) {
+          notifyCreditsUpdate(result.remainingCredits);
+        }
+        
+        const chatbotResponse = typeof result === 'string' ? result : result.textContent;
         const parsedClassifier = safeJsonParse(chatbotResponse); 
  
         setCurrentStartOrNot(parsedClassifier.is_change);
@@ -862,7 +883,14 @@ const DevPage = () => {
       }
     }else{
       try {
-        const chatbotResponse = await chatbot(currentInput, messages);
+        const result = await chatbot(currentInput, messages, user?.id ?? null);
+        
+        // Notify credits update if available
+        if (typeof result === 'object' && result.remainingCredits !== undefined) {
+          notifyCreditsUpdate(result.remainingCredits);
+        }
+        
+        const chatbotResponse = typeof result === 'string' ? result : result.textContent;
         const parsedClassifier = safeJsonParse(chatbotResponse);
 
         setCurrentStartOrNot(parsedClassifier.canStart);
@@ -1267,7 +1295,10 @@ const DevPage = () => {
         {/* Right side - How to, Feedback button and User avatar */}
         <div className="flex items-center space-x-3">
 
-        <button
+           {/* Soul Count */}
+           <SoulCount />
+
+        {/* <button
             onClick={() => window.open('/connect-mcp', '_blank')}
             className="flex items-center space-x-2 px-3 py-2 bg-black hover:bg-gray-900 border border-white hover:border-gray-300 rounded-lg transition-all duration-200 group"
             title="Send Feedback"
@@ -1276,7 +1307,7 @@ const DevPage = () => {
             <span className="text-sm text-white group-hover:text-gray-300 transition-colors hidden sm:block">
               Connect MCP
             </span>
-          </button>
+          </button> */}
 
           {/* Feedback button */}
           <button

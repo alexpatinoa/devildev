@@ -23,7 +23,8 @@ export const generateArchitectureFunction = inngest.createFunction(
         const result = await generateArchitectureWithToolCalling(
           requirement,
           conversationHistory,
-          architectureData
+          architectureData,
+          userId
         );
         return result as ArchitectureData;
       });

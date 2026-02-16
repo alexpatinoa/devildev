@@ -545,7 +545,7 @@ export default function Page() {
                     <div className="flex items-center justify-center px-6 py-4">
                       <Loader2 className="h-4 w-4 animate-spin text-red-400/60" />
                     </div>
-                  ) : userChats.length > 0 ? (
+                  ) : userChats.length > 0 ? ( 
                     userChats.map((chat) => (
                       <button
                         key={chat.id}

@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import { Button } from '../ui/button';
 import useUserSubscription from '@/hooks/useSubscription';
+import SoulCount from './SoulCount';
 
 interface HomeNavProps {
   currentPage?: 'Home' | 'Community' | 'Pricing' | 'Contact';
@@ -23,37 +24,36 @@ export default function HomeNav({ currentPage }: HomeNavProps) {
 
               {/* Logo on the left */}
               <div className="flex z-20 items-center">
-                <button
-                  onClick={() => router.push('/')}
-                  className="flex items-end justify-center gap-0.5 cursor-pointer hover:opacity-80 transition-opacity group"
-                  title="Go to Home"
-                >
-                  {userSubscription ? (
-                   <Image
-                   src="/pro2.png"
-                   alt="DevilDev Logo"
-                   width={15000}
-                   height={4000}
-                   className="h-full w-16 "
-                   priority
-                 />
+                 <button
+                   onClick={() => router.push('/')}
+                   className="flex items-end justify-center gap-0.5 cursor-pointer hover:opacity-80 transition-opacity group"
+                   title="Go to Home"
+                 >
+                   {userSubscription ? (
+                    <Image
+                    src="/pro2.png"
+                    alt="DevilDev Logo"
+                    width={15000}
+                    height={4000}
+                    className="h-full w-16 "
+                    priority
+                  />
 
-                  ): (
-                
-                <Image
-                src="/bold01.png"
-                alt="DevilDev Logo"
-                width={15000}
-                height={4000}
-                className="h-full w-11 "
-                priority
-              />
-                  )}
-                  
-                
-                </button>
-                
-              </div>
+                   ): (
+                 
+                 <Image
+                 src="/bold01.png"
+                 alt="DevilDev Logo"
+                 width={15000}
+                 height={4000}
+                 className="h-full w-11 "
+                 priority
+               />
+                   )}
+                   
+                 
+                 </button>
+               </div>
 
               {/* Navigation links in center */}
               <div className="flex z-10 absolute w-full justify-center items-center">
@@ -104,20 +104,7 @@ export default function HomeNav({ currentPage }: HomeNavProps) {
 
               {/* Auth buttons or user menu on the right */}
               <div className="flex z-20 items-center space-x-3">
-                <Button
-                  onClick={() => window.open('https://github.com/lak7/devildev', '_blank')}
-                  variant="ghost"
-                  className="cursor-pointer h-9 w-9 p-0 flex items-center justify-center rounded-md border border-white/20"
-                >
-                  <Image
-                    src="/github-mark-white.svg"
-                    alt="GitHub"
-                    width={20}
-                    height={20}
-                    className="h-[20px] w-[20px]"
-                    priority
-                  />
-                </Button>
+                <SoulCount />
                 {user ? (
                   <>
                     <Link
