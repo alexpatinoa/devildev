@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useParams, useRouter } from "next/navigation";
 import { Maximize, X, Menu, MessageCircle, Plus, Loader2, MessageSquare, BrainCircuit, FolderKanban, ChevronDown, ChevronRight, Folder, FolderOpen, File, Bug, ListTodo, Sparkles, GripVertical } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import SoulCount from '../../../components/core/SoulCount';
 import { getProject, updateProjectComponentPositions, ProjectMessage, projectChatBot, createProjectChat, getProjectChat, addMessageToProjectChat, createPactProjectChatBot } from "../../../../actions/project";
 import { SignOutButton, useUser } from '@clerk/nextjs';
 import { ChatMessageList, ChatInput, ChatHeader } from '@/components/Project';
@@ -1417,16 +1418,8 @@ const ProjectPage = () => {
 
         {/* Right side - Actions and User avatar */}
         <div className="flex z-20 items-center space-x-3">
-        <button
-            onClick={() => window.open('/connect-mcp', '_blank')}
-            className="flex items-center space-x-2 px-3 py-2 bg-black hover:bg-gray-900 border border-white/69 hover:border-gray-300 rounded-lg transition-all duration-200 group"
-            title="Connect MCP"
-          >
-            <BrainCircuit className="h-4 w-4 text-white group-hover:text-gray-300 transition-colors" />
-            <span className="text-sm text-white group-hover:text-gray-300 transition-colors hidden sm:block">
-              Connect MCP
-            </span>
-          </button>
+        {/* Soul Count */}
+        <SoulCount />
           {/* Feedback button */}
           <button
             onClick={() => setIsFeedbackOpen(true)}
