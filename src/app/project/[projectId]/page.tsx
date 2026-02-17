@@ -23,6 +23,7 @@ import { submitFeedback } from '../../../../actions/feedback';
 import { maxChatCharactersLimitFree, maxChatCharactersLimitPro, maxNumberOfProjectChatsFree, maxNumberOfProjectChatsPro } from '../../../../Limits';
 import useUserSubscription from '@/hooks/useSubscription';
 import PricingDialog from '@/components/PricingDialog';
+import { notifyCreditsUpdate } from '@/lib/credits-events';
 
 interface ProjectChat {
   id: bigint;
@@ -1156,6 +1157,7 @@ const ProjectPage = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user?.id) return;
     if (!inputMessage.trim() || isChatLoading || isCreatingChat || !activeChatId) return;
     if (isCharacterLimitReached) {
       setShowCharacterLimitDialog(true);
@@ -1202,22 +1204,29 @@ const ProjectPage = () => {
       if (selectedPactType === null) {
         // EXISTING FLOW: Regular chatbot
         const chatbotResponse = await projectChatBot(
+          user.id,
           currentInput.trim(),
           project.framework,
           messages,
           architectureData,
         );
 
-        // Ensure we always end up with a plain text assistant response
         let assistantContent: string;
-        if (typeof chatbotResponse === 'string') {
-          const trimmed = chatbotResponse.trim();
-          const cleaned = trimmed.replace(/^```[\s\S]*?```$/g, '').trim();
-          assistantContent = cleaned || trimmed;
-        } else if (chatbotResponse && 'error' in chatbotResponse) {
-          assistantContent = `Sorry, there was an error: ${chatbotResponse.error}`;
-        } else {
-          assistantContent = 'Sorry, there was an issue generating a response.';
+
+         // Notify credits update if available
+        if (typeof chatbotResponse === 'object' && chatbotResponse.remainingCredits !== undefined) {
+          notifyCreditsUpdate(chatbotResponse.remainingCredits);
+          assistantContent = chatbotResponse.textContent;
+        }else{
+          if (typeof chatbotResponse === 'string') {
+            const trimmed = chatbotResponse.trim();
+            const cleaned = trimmed.replace(/^```[\s\S]*?```$/g, '').trim();
+            assistantContent = cleaned || trimmed;
+          } else if (chatbotResponse && 'error' in chatbotResponse) {
+            assistantContent = `Sorry, there was an error: ${chatbotResponse.error}`;
+          } else {
+            assistantContent = 'Sorry, there was an issue generating a response.';
+          }
         }
 
         // For now, just add a simple response

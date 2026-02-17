@@ -738,7 +738,7 @@ const DevPage = () => {
     setIsLoading(true); 
     
     try {
-      const result = await chatbot(initialMessage, currentMessages, user?.id ?? null);
+      const result = await chatbot(initialMessage, currentMessages, user?.id ?? null); 
       
       // Notify credits update if available
       if (typeof result === 'object' && result.remainingCredits !== undefined) {

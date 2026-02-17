@@ -1,9 +1,9 @@
 "use server";
 import { ChatOpenAI } from "@langchain/openai";
 import { PromptTemplate } from "@langchain/core/prompts";
-import { StringOutputParser } from "@langchain/core/output_parsers";
 import { architectureModificationPrompt, chatbotPrompt } from "../prompts/Chatbot";
 import { deductCredits } from "./credits";
+import { extractTextContent } from "@/lib/ai/extractTextContent";
 
 // Return type for agent flow functions
 export type AgentFlowResult = {
@@ -29,8 +29,6 @@ const llmWithWeb = llm2.bindTools([tool])
 
 
 export async function chatbot(userInput: string, conversationHistory: any[] = [], userId: string | null = null) {
-    ;
-
     const template = chatbotPrompt;
 
     // Format conversation history for the prompt
@@ -44,28 +42,11 @@ export async function chatbot(userInput: string, conversationHistory: any[] = []
         userInput: userInput,
         conversationHistory: formattedHistory
     });
-    console.log("chatbot result:", result);
     
     // Extract text content - handle both string and complex content types
-    let textContent: string;
-    if (typeof result.content === 'string') {
-        textContent = result.content;
-    } else if (Array.isArray(result.content) && result.content.length > 0) {
-        const firstContent = result.content[0];
-        if (typeof firstContent === 'string') {
-            textContent = firstContent;
-        } else if (typeof firstContent === 'object' && 'text' in firstContent) {
-            textContent = firstContent.text as string;
-        } else {
-            textContent = JSON.stringify(firstContent);
-        }
-    } else {
-        textContent = JSON.stringify(result.content);
-    }
+    const textContent = extractTextContent(result.content);
     
-    console.log("textContent:", textContent);
-    
-    // Deduct credits if userId is provided
+    // Deduct credits
     if (userId) {
         const inputTokens = result.usage_metadata?.input_tokens ?? 0;
         const outputTokens = result.usage_metadata?.output_tokens ?? 0;
@@ -83,8 +64,6 @@ export async function chatbot(userInput: string, conversationHistory: any[] = []
             };
         }
     }
-    
-    return { textContent };
 }
 
 export async function architectureModificationBot(userInput: string, conversationHistory: any[] = [], architectureData: any, userId: string | null = null) {
@@ -104,21 +83,7 @@ export async function architectureModificationBot(userInput: string, conversatio
     });
     
     // Extract text content - handle both string and complex content types
-    let textContent: string;
-    if (typeof result.content === 'string') {
-        textContent = result.content;
-    } else if (Array.isArray(result.content) && result.content.length > 0) {
-        const firstContent = result.content[0];
-        if (typeof firstContent === 'string') {
-            textContent = firstContent;
-        } else if (typeof firstContent === 'object' && 'text' in firstContent) {
-            textContent = firstContent.text as string;
-        } else {
-            textContent = JSON.stringify(firstContent);
-        }
-    } else {
-        textContent = JSON.stringify(result.content);
-    }
+    const textContent = extractTextContent(result.content);
     
     // Deduct credits if userId is provided
     if (userId) {

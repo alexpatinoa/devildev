@@ -29,11 +29,14 @@ export async function getCredits(userId: string): Promise<{ success: boolean; cr
 export async function deductCredits(
   userId: string,
   inputTokens: number,
-  outputTokens: number
+  outputTokens: number,
+  onlyOutput: boolean = false
 ): Promise<{ success: boolean; remaining?: number; deducted?: number; error?: string }> {
   try {
     // Calculate credits to deduct
-    const creditsToDeduct = Math.ceil(inputTokens / 500) + Math.ceil(outputTokens / 100);
+    const creditsToDeduct = onlyOutput
+      ? Math.ceil(outputTokens / 100)
+      : Math.ceil(inputTokens / 500) + Math.ceil(outputTokens / 100);
 
     if (creditsToDeduct === 0) {
       // No tokens used, no deduction needed

@@ -4,15 +4,16 @@ import { auth } from "@clerk/nextjs/server";
 import { cache } from "react";
 import { ChatOpenAI } from "@langchain/openai";
 import { PromptTemplate } from "@langchain/core/prompts";
-import { StringOutputParser } from "@langchain/core/output_parsers";
 import { ultraProjectChatBotPrompt, projectChatBotBugPrompt, projectChatBotTaskPrompt, projectChatBotFeaturePrompt } from "../prompts/ReverseArchitecture";
 import { createToolCallingAgent, AgentExecutor } from "langchain/agents";
 import { ChatPromptTemplate, MessagesPlaceholder } from "@langchain/core/prompts";
 import { searchCodeTool, getFileContentTool } from "./github/gitTools";
 import { getInstallationToken } from "./githubAppAuth";
+import { extractTextContent } from "@/lib/ai/extractTextContent";
 import Parallel from "parallel-web";
 import { DynamicStructuredTool } from "langchain/tools";
 import { z } from "zod";
+import { deductCredits } from "./credits";
 const openaiKey = process.env.OPENAI_API_KEY;
 const parallelApiKey = process.env.PARALLEL_API_KEY;
 
@@ -519,22 +520,42 @@ export async function updateProjectMessages(projectId: string, messages: Project
 }
 
 
-export async function projectChatBot( userInput: string, projectFramework: string, conversationHistory: any[], projectArchitecture: any): Promise<string | { error: string }> {
+export async function projectChatBot( userId: string, userInput: string, projectFramework: string, conversationHistory: any[], projectArchitecture: any){
      // Format conversation history for the prompt
      const formattedHistory = conversationHistory.map(msg => 
         `${msg.type === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
-    ).join('\n'); 
+    ).join('\n');  
  
     const prompt = PromptTemplate.fromTemplate(ultraProjectChatBotPrompt);
-    const chain = prompt.pipe(llmWithWeb).pipe(new StringOutputParser());
-    const response = await chain.invoke({
+    const chain = prompt.pipe(llm);
+    const result = await chain.invoke({
         userQuery: userInput,
         framework: projectFramework,
         projectArchitecture: projectArchitecture,
         conversationHistory: formattedHistory
     });
 
-    return response;
+
+    const textContent = extractTextContent(result.content);
+
+    // Deduct credits if userId is provided
+    if (userId) {
+        const inputTokens = result.usage_metadata?.input_tokens ?? 0;
+        const outputTokens = result.usage_metadata?.output_tokens ?? 0;
+        
+        const creditResult = await deductCredits(userId, inputTokens, outputTokens, true);
+        if (!creditResult.success) {
+            console.error("Failed to deduct credits:", creditResult.error);
+            return textContent; 
+        } else {
+            console.log(`Credits deducted: ${creditResult.deducted}, remaining: ${creditResult.remaining}`);
+            return {
+                textContent,
+                remainingCredits: creditResult.remaining,
+                deducted: creditResult.deducted
+            };
+        }
+    }
 }
 
 export async function createPactProjectChatBot(
@@ -681,6 +702,8 @@ export async function createPactProjectChatBot(
       conversationHistory: formattedHistory,
       repoFullName: project.repoFullName,
     });
+
+    console.log("agentResult:", agentResult);
 
     // Check if agent completed successfully
     if (!agentResult.output || typeof agentResult.output !== 'string') {
