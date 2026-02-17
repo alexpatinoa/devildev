@@ -1253,41 +1253,48 @@ const ProjectPage = () => {
         const pactType = pactTypeMapping[selectedPactType];
         
         const pactBotResponse = await createPactProjectChatBot(
+          user.id,
           projectId,
           currentInput.trim(),
           pactType,
           messages
         );
+
         
-        if ('error' in pactBotResponse) {
+        if (!pactBotResponse || 'error' in pactBotResponse) {
           // Handle error
           const errorMessage: ProjectMessage = {
             id: generateMessageId(),
             type: 'assistant',
-            content: `Error creating pact: ${pactBotResponse.error}`,
+            content: `Error creating pact: ${pactBotResponse?.error || 'Unknown error occurred'}`,
             timestamp: new Date().toISOString()
           };
           setMessages(prev => [...prev, errorMessage]);
           await addMessageToProjectChat(projectId, activeChatId, errorMessage);
         } else {
+          // Notify credits update if available
+          if (pactBotResponse.remainingCredits !== undefined) {
+            notifyCreditsUpdate(pactBotResponse.remainingCredits);
+          }
+
           // SUCCESS: Display short response in chat
           const assistantMessage: ProjectMessage = {
             id: generateMessageId(),
             type: 'assistant',
-            content: pactBotResponse.shortResponse,
+            content: pactBotResponse.content.shortResponse,
             timestamp: new Date().toISOString()
           };
           setMessages(prev => [...prev, assistantMessage]);
           await addMessageToProjectChat(projectId, activeChatId, assistantMessage);
           
           // Convert markdown body to Tiptap JSON
-          const tiptapBody = convertMarkdownToTiptapJson(pactBotResponse.pact.body);
+          const tiptapBody = convertMarkdownToTiptapJson(pactBotResponse.content.pact.body);
 
           // Create the pact
           const createResult = await createPact(
             projectId,
             pactType,
-            pactBotResponse.pact.title,
+            pactBotResponse.content.pact.title,
             tiptapBody
           );
           if (createResult.success && createResult.pact) {

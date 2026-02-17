@@ -538,7 +538,7 @@ export async function projectChatBot( userId: string, userInput: string, project
 
     const textContent = extractTextContent(result.content);
 
-    // Deduct credits if userId is provided
+    // Deduct credits
     if (userId) {
         const inputTokens = result.usage_metadata?.input_tokens ?? 0;
         const outputTokens = result.usage_metadata?.output_tokens ?? 0;
@@ -559,17 +559,13 @@ export async function projectChatBot( userId: string, userInput: string, project
 }
 
 export async function createPactProjectChatBot(
+  userId: string,
   projectId: string,
   userInput: string,
   pactType: 'BUG' | 'TASK' | 'FEATURE',
   conversationHistory: any[]
-): Promise<{ shortResponse: string; pact: { title: string; body: string } } | { error: string }> {
+) {
   try {
-    // 1. Authentication & Authorization
-    const { userId } = await auth();
-    if (!userId) {
-      return { error: 'Unauthorized' };
-    }
 
     // 2. Fetch Project Data
     const project = await db.project.findUnique({
@@ -681,8 +677,47 @@ export async function createPactProjectChatBot(
       new MessagesPlaceholder("agent_scratchpad"),
     ]);
 
+    let tokenUsage = {
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+      };
+
+    const trackedLlm = llm.withConfig({
+        callbacks: [
+          {
+            handleLLMEnd(output: any) {
+              const usage =
+                output?.generations?.[0]?.[0]?.generationInfo?.usage ||
+                output?.generations?.[0]?.[0]?.message?.response_metadata?.usage ||
+                output?.llmOutput?.tokenUsage;
+      
+              if (!usage) return;
+      
+              tokenUsage.promptTokens +=
+                usage.prompt_tokens ??
+                usage.promptTokens ??
+                usage.input_tokens ??
+                0;
+      
+              tokenUsage.completionTokens +=
+                usage.completion_tokens ??
+                usage.completionTokens ??
+                usage.output_tokens ??
+                0;
+      
+              tokenUsage.totalTokens +=
+                usage.total_tokens ??
+                usage.totalTokens ??
+                tokenUsage.promptTokens + tokenUsage.completionTokens;
+            },
+          },
+        ],
+      });
+      
+
     const agent = await createToolCallingAgent({
-      llm,
+      llm: trackedLlm,
       tools,
       prompt,
     });
@@ -691,7 +726,7 @@ export async function createPactProjectChatBot(
       agent,
       tools,
       verbose: true,
-      maxIterations: 15, // Reduced to encourage fewer tool calls and lower costs
+      maxIterations: 15,
     });
 
     // 7. Execute Agent
@@ -702,8 +737,6 @@ export async function createPactProjectChatBot(
       conversationHistory: formattedHistory,
       repoFullName: project.repoFullName,
     });
-
-    console.log("agentResult:", agentResult);
 
     // Check if agent completed successfully
     if (!agentResult.output || typeof agentResult.output !== 'string') {
@@ -754,15 +787,26 @@ export async function createPactProjectChatBot(
 //       return { error: 'Generated pact is missing required fields. Please try again.' };
 //     }
 
-     const structuredOutput = JSON.parse(agentResult.output);
+    const structuredOutput = JSON.parse(agentResult.output);
 
-    return {
-      shortResponse: structuredOutput.shortResponse,
-      pact: {
-        title: structuredOutput.pact.title,
-        body: structuredOutput.pact.body
-      }
-    };
+    // Deduct credits
+    if (userId) {
+        const inputTokens = tokenUsage.promptTokens;
+        const outputTokens = tokenUsage.completionTokens;
+        
+        const creditResult = await deductCredits(userId, inputTokens, outputTokens);
+        return {
+            content: {
+                shortResponse: structuredOutput.shortResponse,
+                pact: {
+                  title: structuredOutput.pact.title,
+                  body: structuredOutput.pact.body
+                }
+              },
+            remainingCredits: creditResult.remaining,
+            deducted: creditResult.deducted
+        };
+    }
 
   } catch (error) {
     console.error('Error in createPactProjectChatBot:', error);

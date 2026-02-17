@@ -745,7 +745,7 @@ const DevPage = () => {
         notifyCreditsUpdate(result.remainingCredits);
       }
       
-      const chatbotResponse = typeof result === 'string' ? result : result.textContent;
+      const chatbotResponse = typeof result === 'string' ? result : result?.textContent ?? '';
       let cleanedIsStart = chatbotResponse;
       
       const parsedClassifier = safeJsonParse(cleanedIsStart);  
@@ -890,7 +890,7 @@ const DevPage = () => {
           notifyCreditsUpdate(result.remainingCredits);
         }
         
-        const chatbotResponse = typeof result === 'string' ? result : result.textContent;
+        const chatbotResponse = typeof result === 'string' ? result : result?.textContent ?? '';
         const parsedClassifier = safeJsonParse(chatbotResponse);
 
         setCurrentStartOrNot(parsedClassifier.canStart);
