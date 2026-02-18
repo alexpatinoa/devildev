@@ -66,7 +66,7 @@ export const generateReverseArchitectureFunction = inngest.createFunction(
   },
   { event: "reverse-architecture/generate" },
   async ({ event, step }) => {
-    const { projectId, activeChatId } = event.data;
+    const { projectId, activeChatId, userId } = event.data;
 
     try {
       // Step 1: Fetch repository tree structure up to 4 levels deep
@@ -83,7 +83,7 @@ export const generateReverseArchitectureFunction = inngest.createFunction(
 
       // Step 2: Generate architecture from GitHub repo analysis (expensive 5-7 min operation)
       const architectureResult = await step.run("generate-reverse-architecture", async () => {
-        return await generateArchitecture(projectId, repoTree);
+        return await generateArchitecture(projectId, repoTree, userId);
       });  
 
       // Check for errors in architecture generation
@@ -318,6 +318,7 @@ export const regenerateReverseArchitectureFunction = inngest.createFunction(
           exactFilesChanges,
           latestArchitecture,
           repoTree,
+          userId,
         });
 
         if (result.error) {
@@ -391,4 +392,4 @@ export const regenerateReverseArchitectureFunction = inngest.createFunction(
       throw error; // Let Inngest handle retries
     }
   }
-);
+); 

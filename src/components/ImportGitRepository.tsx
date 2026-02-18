@@ -479,7 +479,7 @@ export default function ImportGitRepository({ onImport }: ImportGitRepositoryPro
           <Button
               onClick={() => window.location.href = '/api/github/auth'}
               variant="outline"
-              className="border-white/20 text-black w-1/5 hover:bg-white/10 hover:border-white/40 hover:text-white"
+              className="border-white/20 text-white w-1/5 bg-white/5 hover:bg-white/10 hover:border-white/40"
             >
               {/* <Github className="w-4 h-4 mr-2" /> */}
               Configure GitHub
@@ -495,7 +495,7 @@ export default function ImportGitRepository({ onImport }: ImportGitRepositoryPro
                 }}
                 variant="outline"
                 size="sm"
-                className="border-white/20 text-black hover:text-white hover:bg-white/10 hover:border-white/40"
+                className="border-white/20 text-white bg-white/5 hover:bg-white/10 hover:border-white/40"
               >
                 Clear Search
               </Button>
@@ -595,7 +595,7 @@ export default function ImportGitRepository({ onImport }: ImportGitRepositoryPro
                               variant="outline"
                               size="sm"
                               onClick={() => window.open(`https://github.com/${repo.fullName}`, '_blank')}
-                              className="border-white/20 text-black hover:bg-white/69 hover:border-white/40"
+                              className="border-white/20 text-white bg-white/5 hover:bg-white/10 hover:border-white/40"
                             >
                               <ExternalLink className="w-4 h-4" />
                             </Button>
@@ -649,7 +649,7 @@ export default function ImportGitRepository({ onImport }: ImportGitRepositoryPro
               <Button
                 variant="outline"
                 onClick={cancelImport}
-                className="border-white/20 text-black hover:text-white hover:bg-white/10 hover:border-white/40"
+                className="border-white/20 text-white bg-white/5 hover:bg-white/10 hover:border-white/40"
               >
                 Cancel
               </Button>

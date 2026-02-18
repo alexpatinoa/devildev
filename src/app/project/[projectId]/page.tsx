@@ -23,7 +23,7 @@ import { submitFeedback } from '../../../../actions/feedback';
 import { maxChatCharactersLimitFree, maxChatCharactersLimitPro, maxNumberOfProjectChatsFree, maxNumberOfProjectChatsPro } from '../../../../Limits';
 import useUserSubscription from '@/hooks/useSubscription';
 import PricingDialog from '@/components/PricingDialog';
-import { notifyCreditsUpdate } from '@/lib/credits-events';
+import { notifyCreditsUpdate, refetchCredits } from '@/lib/credits-events';
 
 interface ProjectChat {
   id: bigint;
@@ -652,6 +652,11 @@ const ProjectPage = () => {
         const result = await checkProjectArchitectureByGenerationId(projectId);
         
         if (result.success && result.exists && result.architecture) {
+          
+          // Refetch credits after background job completes
+          if (user?.id) {
+            await refetchCredits(user.id);
+          }
           
           // Reload the page to show the generated architecture
           window.location.reload();
