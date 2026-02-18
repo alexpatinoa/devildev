@@ -43,7 +43,6 @@ export async function POST(req: NextRequest) {
 
   // Verify the payload with the headers
   try {
-    ;
     evt = wh.verify(payload, {
       'svix-id': svix_id,
       'svix-timestamp': svix_timestamp,
@@ -56,8 +55,6 @@ export async function POST(req: NextRequest) {
       status: 400,
     });
   }
-  ;
-
   // Get the ID and type
   const { id } = evt.data;
   const eventType = evt.type;
@@ -65,7 +62,6 @@ export async function POST(req: NextRequest) {
   ;     
   // Handle the webhook
   try {
-    ;
     if (eventType === 'user.created') {
       const { id, email_addresses, first_name, last_name, username } = evt.data;
       
@@ -86,14 +82,12 @@ export async function POST(req: NextRequest) {
           email: primaryEmail.email_address,
           name: first_name && last_name ? `${first_name} ${last_name}` : first_name || last_name || null,
           username: username || null,
+          credits: 500,
         },
       });
       ;
 
     }
-
-    ;
-
     if (eventType === 'user.updated') {
       const { id, email_addresses, first_name, last_name, username } = evt.data;
 
@@ -121,7 +115,6 @@ export async function POST(req: NextRequest) {
       ;
 
     }
-
     if (eventType === 'user.deleted') {
       const { id } = evt.data;
       
@@ -135,7 +128,6 @@ export async function POST(req: NextRequest) {
       ;
 
     }
-
     return new NextResponse('', { status: 200 });
   } catch (error) {
     console.error('Error handling webhook:', error);

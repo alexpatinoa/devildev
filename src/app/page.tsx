@@ -17,8 +17,8 @@ import GithubOAuthDeprecatedNotice from '@/components/GithubOAuthDeprecatedNotic
 import { maxFreeChats, maxProChats } from '../../Limits';
 import useUserSubscription from '@/hooks/useSubscription';
 import PricingDialog from '@/components/PricingDialog';
-import { cn } from '@/lib/utils';
 import OpenSourceDialog from '@/components/OpenSrcDialog';
+import WelcomeDialog from '@/components/WelcomeDialog';
 import AnimatedGradientText from '@/components/AnimatedGradientText';
 
 
@@ -73,6 +73,7 @@ export default function Page() {
   const isMobile = useMediaQuery('(max-width: 640px)'); 
   const [showMaxChatsDialog, setShowMaxChatsDialog] = useState(false);
   const [isOpenSourceDialogOpen, setIsOpenSourceDialogOpen] = useState(false);
+  const [isWelcomeDialogOpen, setIsWelcomeDialogOpen] = useState(false);
   // Typewriter rotating heading state
   const rotatingTexts = ["Visualize your Codebase","10x your vibe coding"];
   const [currentRotateIndex, setCurrentRotateIndex] = useState(0);
@@ -164,6 +165,14 @@ export default function Page() {
 
   // Fetch chats and GitHub status when user is signed in
   useEffect(() => {
+    // Check for signup parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('signup') === 'true') {
+      setIsWelcomeDialogOpen(true);
+      // Remove the parameter from URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
     // Only show the Open Source dialog once per user (per browser)
     try {
       const hasSeenOpenSourceDialog = localStorage.getItem('hasSeenOpenSourceDialog');
@@ -181,7 +190,6 @@ export default function Page() {
     }
     
     // Check for GitHub connection success
-    const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('github_connected') === 'true') {
       // Remove the parameter from URL
       window.history.replaceState({}, document.title, window.location.pathname);
@@ -279,6 +287,12 @@ export default function Page() {
               console.error('Error setting Open Source dialog flag in localStorage:', error);
             }
             setIsOpenSourceDialogOpen(false);
+          }}
+        />
+        <WelcomeDialog
+          isOpen={isWelcomeDialogOpen}
+          onClose={() => {
+            setIsWelcomeDialogOpen(false);
           }}
         />
         {/* Mobile/Tablet Navbar */}
