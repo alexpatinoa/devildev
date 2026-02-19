@@ -25,7 +25,7 @@ export default function PricingDialog({ open, onOpenChange, description }: Prici
 
   const freeFeatures = [
     "Limited Size Limit for project architecture",
-    "Only 500 Souls per month",
+    "Only 250 Souls per month",
     "No Souls rollover",
 ]
 

@@ -22,10 +22,7 @@ export async function getCredits(userId: string): Promise<{ success: boolean; cr
   }
 }
 
-/**
- * Deduct credits from a user based on token usage
- * Formula: 1 credit per 200 input tokens + 1 credit per 100 output tokens
- */
+//Deduct credits from a user based on token usage
 export async function deductCredits(
   userId: string,
   inputTokens: number,

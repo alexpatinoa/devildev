@@ -502,10 +502,7 @@ class TokenUsageCallbackHandler extends BaseCallbackHandler {
       const usage = output.llmOutput.tokenUsage;
       this.totalInputTokens += usage.promptTokens || 0;
       this.totalOutputTokens += usage.completionTokens || 0;
-    }
-    
-    // Also check for usage in generations
-    if (output.generations?.[0]?.[0]?.generationInfo?.usage) {
+    }else if (output.generations?.[0]?.[0]?.generationInfo?.usage) {
       const usage = output.generations[0][0].generationInfo.usage;
       this.totalInputTokens += usage.prompt_tokens || usage.input_tokens || 0;
       this.totalOutputTokens += usage.completion_tokens || usage.output_tokens || 0;

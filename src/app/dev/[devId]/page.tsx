@@ -6,7 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import 'highlight.js/styles/github-dark.css';
-import {HelpCircle, Image as ImageIcon, SendHorizonal, Maximize, X, Menu, MessageCircle, Users, Phone, Plus, Loader2, MessageSquare, BrainCircuit, ChevronDown } from 'lucide-react';
+import {HelpCircle, Image as ImageIcon, SendHorizontal, Maximize, X, Menu, MessageCircle, Users, Phone, Plus, Loader2, MessageSquare, BrainCircuit, ChevronDown } from 'lucide-react';
 import Architecture from '@/components/core/architecture';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import SoulCount from '../../../components/core/SoulCount';
@@ -1773,7 +1773,7 @@ const DevPage = () => {
                       className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
                       disabled={!inputMessage.trim() || isLoading || isArchitectureLoading}
                     >
-                      <SendHorizonal className="h-4 w-4" />
+                      <SendHorizontal className="h-4 w-4" />
                     </button>
                   </div>
                 </form>
@@ -2166,7 +2166,7 @@ const DevPage = () => {
                       className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
                       disabled={!inputMessage.trim() || isLoading || isArchitectureLoading}
                     >
-                      <SendHorizonal className="h-4 w-4" />
+                      <SendHorizontal className="h-4 w-4" />
                     </button>
                   </div>
                 </form>
