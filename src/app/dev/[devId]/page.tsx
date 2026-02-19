@@ -647,6 +647,12 @@ const DevPage = () => {
         if (result.success) {
           // Start polling for the architecture
           pollForArchitecture(generationId);
+        } else if (result.error === 'INSUFFICIENT_CREDITS') {
+          if (result.remainingCredits !== undefined) {
+            notifyCreditsUpdate(result.remainingCredits);
+          }
+          setShowLowSoulsDialog(true);
+          setIsArchitectureLoading(false);
         } else {
           console.error('Failed to trigger architecture generation:', result.error);
           setIsArchitectureLoading(false);

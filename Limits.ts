@@ -1,12 +1,10 @@
 // PROJECT FREE 
-export const maxNumberOfProjectsFree = 1;
+export const maxNumberOfProjectsFree = 5;
 export const maxProjectSizeFree = 25000;
-export const maxNumberOfProjectChatsFree = 3; 
 
 // PROJECT PRO 
-export const maxNumberOfProjectsPro = 15;
+export const maxNumberOfProjectsPro = 50;
 export const maxProjectSizePro = 100000;
-export const maxNumberOfProjectChatsPro = 100;
 
 // REGENERATE ARCHITECTURE FREE
 export const maxFilesChangedFree = 50;
@@ -25,3 +23,4 @@ export const maxChatCharactersLimitPro = 200000;
 
 // CREDITS
 export const minSoulsToSendMessage = 5;
+export const minSoulsToGenArch = 25;

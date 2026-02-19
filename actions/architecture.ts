@@ -16,7 +16,8 @@ import { notificationComponentsTool } from "./architecture/notificationComponent
 import { paymentComponentsTool } from "./architecture/paymentComponents";
 import { realtimeComponentsTool } from "./architecture/realtimeComponents";
 import { basicWebComponentsTool } from "./architecture/webComponents";
-import { deductCredits } from "./credits";
+import { deductCredits, getCredits } from "./credits";
+import { minSoulsToGenArch } from "../Limits";
 import { BaseCallbackHandler } from "@langchain/core/callbacks/base";
 const { inngest } = await import('../src/inngest/client');
 
@@ -397,11 +398,14 @@ export async function triggerArchitectureGeneration(data: {
   componentPositions: any;
   userId: string;
 }) {
-  
+  // Check credits before triggering Inngest
+  const creditsResult = await getCredits(data.userId);
+  if (creditsResult.success && creditsResult.credits !== undefined && creditsResult.credits < minSoulsToGenArch) {
+    return { success: false, error: 'INSUFFICIENT_CREDITS', remainingCredits: creditsResult.credits };
+  }
+
   try {
     // Import inngest dynamically to avoid client-side bundling
-    
-    
     const response = await inngest.send({
       name: "architecture/generate",
       data: data

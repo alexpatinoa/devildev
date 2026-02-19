@@ -9,8 +9,8 @@ import { getFileContentTool, searchCodeTool, getFilePatchTool } from './github/g
 import { getInstallationToken } from './githubAppAuth';
 import { createToolCallingAgent, AgentExecutor } from "langchain/agents";
 import { ChatPromptTemplate, MessagesPlaceholder } from "@langchain/core/prompts";
-import { maxFreeArchitectureRegenerations } from '../Limits';
-import { deductCredits } from './credits';
+import { maxFreeArchitectureRegenerations, minSoulsToGenArch } from '../Limits';
+import { deductCredits, getCredits } from './credits';
 import { BaseCallbackHandler } from "@langchain/core/callbacks/base";
 const { inngest } = await import('../src/inngest/client');
 
@@ -944,6 +944,12 @@ export async function triggerReverseArchitectureGeneration(data: {
   activeChatId: string | null;
   userId: string;
 }) {
+  // Check credits before triggering Inngest
+  const creditsResult = await getCredits(data.userId);
+  if (creditsResult.success && creditsResult.credits !== undefined && creditsResult.credits < minSoulsToGenArch) {
+    return { success: false, error: 'INSUFFICIENT_CREDITS', remainingCredits: creditsResult.credits };
+  }
+
   try {
     
     

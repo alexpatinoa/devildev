@@ -20,7 +20,7 @@ import { ProjectPageSkeleton } from '@/components/ui/project-skeleton';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { submitFeedback } from '../../../../actions/feedback';
-import { maxChatCharactersLimitFree, maxChatCharactersLimitPro, maxNumberOfProjectChatsFree, maxNumberOfProjectChatsPro } from '../../../../Limits';
+import { maxChatCharactersLimitFree, maxChatCharactersLimitPro} from '../../../../Limits';
 import useUserSubscription from '@/hooks/useSubscription';
 import PricingDialog from '@/components/PricingDialog';
 import { notifyCreditsUpdate, refetchCredits } from '@/lib/credits-events';
@@ -1039,6 +1039,12 @@ const ProjectPage = () => {
                   if (result.success) {
                     // Start polling for the architecture
                     pollForProjectArchitecture();
+                  } else if (result.error === 'INSUFFICIENT_CREDITS') {
+                    if (result.remainingCredits !== undefined) {
+                      notifyCreditsUpdate(result.remainingCredits);
+                    }
+                    setShowLowSoulsDialog(true);
+                    setIsArchitectureGenerating(false);
                   } else {
                     console.error('Failed to trigger architecture generation:', result.error);
                     setIsArchitectureGenerating(false);
@@ -1171,10 +1177,8 @@ const ProjectPage = () => {
       timestamp: new Date().toISOString()
     };
 
-
     // Add user message to local state immediately
     setMessages(prevMessages => [...prevMessages, userMessage]);
-
     
     const currentInput = inputMessage;
     setInputMessage('');
