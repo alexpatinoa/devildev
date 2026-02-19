@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.3.1-blue" alt="Version 0.3.1" />
+  <img src="https://img.shields.io/badge/version-0.4.0-blue" alt="Version 0.4.0" />
    <img src="https://img.shields.io/badge/status-experimental-orange" alt="Status: Experimental" />
    <a href="https://opensource.org/licenses/Apache-2.0">
     <img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License: Apache 2.0" />

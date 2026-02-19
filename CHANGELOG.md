@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.4.0
+### Added
+- Introduced a new credit-based system called Souls
+- Each user is allocated Souls which are consumed based on AI usage
+
+### Improved
+- More predictable and fair AI usage across users
+- Better resource allocation for sustained performance and scalability
+
+
 ## v0.3.1
 ### Added
 - Now Pacts can be created via ChatBot
