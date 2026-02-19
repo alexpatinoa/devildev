@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { X, Github, Star } from "lucide-react"
 import { GiSoulVessel } from "react-icons/gi"
+import { signUpInitialSouls } from '../../Limits';
 
 interface WelcomeDialogProps {
   isOpen: boolean
@@ -68,14 +69,14 @@ export default function WelcomeDialog({ isOpen, onClose }: WelcomeDialogProps) {
               </h2>
               <p className="text-sm text-zinc-300">
                 As a welcome reward, we&apos;ve added{" "}
-                <span className="font-semibold text-red-300">500 souls</span> to your
+                <span className="font-semibold text-red-300">{signUpInitialSouls} souls</span> to your
                 account. Go build something fun.
               </p>
             </div>
 
             <div className="inline-flex items-center gap-2 rounded-full border border-red-500/40 bg-red-950/50 px-3 py-1.5 text-sm text-red-100">
               <GiSoulVessel className="h-4 w-4" />
-              <span>+500 souls added</span>
+              <span>+{signUpInitialSouls} souls added</span>
             </div>
 
             <div className="space-y-1">

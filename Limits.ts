@@ -24,3 +24,5 @@ export const maxChatCharactersLimitPro = 200000;
 // CREDITS
 export const minSoulsToSendMessage = 5;
 export const minSoulsToGenArch = 25;
+
+export const signUpInitialSouls = 250;

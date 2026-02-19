@@ -3,6 +3,7 @@ import { Webhook } from 'svix';
 import { headers } from 'next/headers';
 import { WebhookEvent } from '@clerk/nextjs/server';
 import { db } from '@/lib/db';
+import { signUpInitialSouls } from '../../../../../Limits';
 
 export async function POST(req: NextRequest) {
   ;
@@ -11,8 +12,6 @@ export async function POST(req: NextRequest) {
   if (!WEBHOOK_SECRET) { 
     throw new Error('Please add CLERK_WEBHOOK_SECRET from Clerk Dashboard to .env or .env.local');
   }
-
-  ;
 
   // Get the headers
   const headerPayload = await headers();
@@ -59,7 +58,6 @@ export async function POST(req: NextRequest) {
   const { id } = evt.data;
   const eventType = evt.type;
 
-  ;     
   // Handle the webhook
   try {
     if (eventType === 'user.created') {
@@ -82,7 +80,7 @@ export async function POST(req: NextRequest) {
           email: primaryEmail.email_address,
           name: first_name && last_name ? `${first_name} ${last_name}` : first_name || last_name || null,
           username: username || null,
-          credits: 500,
+          credits: signUpInitialSouls,
         },
       });
       ;
