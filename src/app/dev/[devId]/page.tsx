@@ -1705,7 +1705,7 @@ const DevPage = () => {
                       className="w-full bg-transparent text-white placeholder-gray-400 px-4 py-3 text-sm md:text-base focus:outline-none resize-none overflow-y-auto min-h-[60px] max-h-[180px]"
                       rows={2}
                       style={{ height: textareaHeight }}
-                      maxLength={5000}
+                      maxLength={MAX_CHARACTERS}
                       disabled={isLoading || isArchitectureLoading}
                     />
                   </div>
@@ -2098,7 +2098,7 @@ const DevPage = () => {
                       className="w-full bg-transparent text-white placeholder-gray-400 px-4 py-3 text-sm md:text-base focus:outline-none resize-none overflow-y-auto min-h-[60px] max-h-[180px]"
                       rows={2}
                       style={{ height: textareaHeight }}
-                      maxLength={5000}
+                      maxLength={MAX_CHARACTERS}
                       disabled={isLoading || isArchitectureLoading}
                     />
                   </div>

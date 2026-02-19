@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useParams, useRouter } from "next/navigation";
-import { Maximize, X, Menu, MessageCircle, Plus, Loader2, MessageSquare, BrainCircuit, FolderKanban, ChevronDown, ChevronRight, Folder, FolderOpen, File, Bug, ListTodo, Sparkles, GripVertical } from 'lucide-react';
+import { Maximize, X, Menu, MessageCircle, Plus, Loader2, MessageSquare, FolderKanban, ChevronDown, ChevronRight, Folder, FolderOpen, File, Bug, ListTodo, Sparkles, GripVertical } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import SoulCount from '../../../components/core/SoulCount';
 import { getProject, updateProjectComponentPositions, ProjectMessage, projectChatBot, createProjectChat, getProjectChat, addMessageToProjectChat, createPactProjectChatBot } from "../../../../actions/project";
@@ -172,7 +172,6 @@ const ProjectPage = () => {
       const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
       const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
       const { userSubscription, isLoadingUserSubscription, isErrorUserSubscription } = useUserSubscription();
-      const [MAX_CHATS, setMAX_CHATS] = useState(0);
       const [MAX_CHARACTERS, setMAX_CHARACTERS] = useState(0);
  
       // Function to handle feedback submission
@@ -693,7 +692,6 @@ const ProjectPage = () => {
   }, []);
 
   useEffect(() => {
-    setMAX_CHATS(userSubscription ? maxNumberOfProjectChatsPro : maxNumberOfProjectChatsFree);
     setMAX_CHARACTERS(userSubscription ? maxChatCharactersLimitPro : maxChatCharactersLimitFree);
   }, [userSubscription]);
 
@@ -816,10 +814,7 @@ const ProjectPage = () => {
   const handleCreateNewChat = async () => {
 
     if(isChatLoading || isArchitectureGenerating || messages.length === 0 || isLoadingUserSubscription) return;
-    if (projectChats.length >= MAX_CHATS) {
-      setShowMaxChatsDialog(true);
-      return;
-    }
+
 
     // Optimistic UI: add a temporary chat and switch immediately
     const tempId = `temp-${Date.now()}`;
@@ -1641,6 +1636,7 @@ const ProjectPage = () => {
 
             {/* Input Area */}
             <ChatInput
+              maxLength={MAX_CHARACTERS}
               inputMessage={inputMessage}
               textareaHeight={textareaHeight}
               isChatLoading={isChatLoading}
@@ -1860,6 +1856,7 @@ const ProjectPage = () => {
 
             {/* Input Area - Only show for chat tab */}
             <ChatInput
+              maxLength={MAX_CHARACTERS}
               inputMessage={inputMessage}
               textareaHeight={textareaHeight}
               isChatLoading={isChatLoading || isCharacterLimitReached}
@@ -2413,12 +2410,6 @@ const ProjectPage = () => {
         /* Disable text selection during resize */
         ${isResizing ? '*{user-select: none !important;}' : ''}
       `}</style>
-      {/* Max Chats Pricing Dialog */}
-      <PricingDialog 
-        open={showMaxChatsDialog} 
-        onOpenChange={setShowMaxChatsDialog}
-        description={`You've reached the maximum limit of ${MAX_CHATS} chats for this project. Upgrade to Pro to create more chats and unlock advanced features.`}
-      />
 
       {/* Character Limit Pricing Dialog */}
       <PricingDialog 

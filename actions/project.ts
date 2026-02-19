@@ -524,7 +524,7 @@ export async function projectChatBot( userId: string, userInput: string, project
      // Format conversation history for the prompt
      const formattedHistory = conversationHistory.map(msg => 
         `${msg.type === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
-    ).join('\n');  
+    ).join('\n');   
  
     const prompt = PromptTemplate.fromTemplate(ultraProjectChatBotPrompt);
     const chain = prompt.pipe(llm);
