@@ -180,7 +180,7 @@ export default function PactCreationForm({ pactType, projectId, onSuccess, onCan
       </div>
 
       {/* Form Content */}
-      <div className="flex-1 flex flex-col overflow-hidden px-6 py-4 space-y-4">
+      <div className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden px-6 py-4 space-y-4 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
         <div className="space-y-2">
           <label htmlFor="title" className="text-sm font-medium text-gray-300">
             Title <span className="text-red-400">*</span>
@@ -200,11 +200,11 @@ export default function PactCreationForm({ pactType, projectId, onSuccess, onCan
           <label className="text-sm font-medium text-gray-300">
             Description
           </label>
-          <div className="flex-1 bg-gray-900/50 rounded-lg border border-gray-700 overflow-clip hover:border-gray-600 transition-colors focus-within:border-gray-500">
+          <div className="flex-1 bg-gray-900/50 rounded-lg border border-gray-700 overflow-hidden hover:border-gray-600 transition-colors focus-within:border-gray-500">
             <RichTextEditor
               placeholder="Add detailed description..."
               editorClassName="prose prose-stone dark:prose-invert max-w-none focus:outline-none pl-14 pr-5 py-4 w-full flex-1 min-h-[180px] text-gray-300"
-              containerClassName="h-full overflow-y-auto scrollbar-thin"
+              containerClassName="h-full overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600"
               onEditorReady={setEditor}
             />
           </div>

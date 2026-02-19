@@ -493,11 +493,11 @@ export default function PactDetailView({ pact, pactType, onBack, onUpdate, onDel
 
       {/* Body Content */}
       {isEditing ? (
-        <div className="flex-1 overflow-clip px-6 py-4">
+        <div className="flex-1 overflow-hidden px-6 py-4">
           <RichTextEditor
             placeholder="Add detailed description..."
             editorClassName="prose prose-stone dark:prose-invert max-w-none focus:outline-none pl-14 pr-5 py-4 w-full flex-1 text-gray-300"
-            containerClassName="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent hover:scrollbar-thumb-gray-600"
+            containerClassName="h-full overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-400 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-300"
             onEditorReady={(ed) => {
               setEditor(ed);
               if (ed && currentBody) {
@@ -507,7 +507,7 @@ export default function PactDetailView({ pact, pactType, onBack, onUpdate, onDel
           />
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto px-6 py-4 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent hover:scrollbar-thumb-gray-600">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 py-4 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-400 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-300">
           {hasBody(currentBody) ? (
             <PactBodyRenderer body={currentBody} />
           ) : (
