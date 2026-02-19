@@ -2,7 +2,8 @@
 import { ChatOpenAI } from "@langchain/openai";
 import { PromptTemplate } from "@langchain/core/prompts";
 import { architectureModificationPrompt, chatbotPrompt } from "../prompts/Chatbot";
-import { deductCredits } from "./credits";
+import { deductCredits, getCredits } from "./credits";
+import { minSoulsToSendMessage } from "../Limits";
 import { extractTextContent } from "@/lib/ai/extractTextContent";
 
 // Return type for agent flow functions
@@ -29,6 +30,14 @@ const llmWithWeb = llm2.bindTools([tool])
 
 
 export async function chatbot(userInput: string, conversationHistory: any[] = [], userId: string | null = null) {
+    // Check credits before running the agent
+    if (userId) {
+        const creditsResult = await getCredits(userId);
+        if (creditsResult.success && creditsResult.credits !== undefined && creditsResult.credits < minSoulsToSendMessage) {
+            return { error: 'INSUFFICIENT_CREDITS', remainingCredits: creditsResult.credits };
+        }
+    }
+
     const template = chatbotPrompt;
 
     // Format conversation history for the prompt
@@ -67,6 +76,14 @@ export async function chatbot(userInput: string, conversationHistory: any[] = []
 }
 
 export async function architectureModificationBot(userInput: string, conversationHistory: any[] = [], architectureData: any, userId: string | null = null) {
+    // Check credits before running the agent
+    if (userId) {
+        const creditsResult = await getCredits(userId);
+        if (creditsResult.success && creditsResult.credits !== undefined && creditsResult.credits < minSoulsToSendMessage) {
+            return { error: 'INSUFFICIENT_CREDITS', remainingCredits: creditsResult.credits };
+        }
+    }
+
     const template = architectureModificationPrompt;
 
     // Format conversation history for the prompt

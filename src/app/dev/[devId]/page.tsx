@@ -192,8 +192,6 @@ const DevPage = () => {
   const [startX, setStartX] = useState(0);
   const [startLeftWidth, setStartLeftWidth] = useState(30);
   
-  // Sidebar state - no longer needed as it's hover-based
-  const [isSidebarHovered, setIsSidebarHovered] = useState(false);
   
   // New sidebar state for dev page
   const [isDevSidebarHovered, setIsDevSidebarHovered] = useState(false);
@@ -210,8 +208,8 @@ const DevPage = () => {
   const [isHowToOpen, setIsHowToOpen] = useState(false);
 
   // Character limit state
-  const [isCharacterLimitReached, setIsCharacterLimitReached] = useState(false);
   const [showCharacterLimitDialog, setShowCharacterLimitDialog] = useState(false);
+  const [showLowSoulsDialog, setShowLowSoulsDialog] = useState(false);
   
   
   // Coach mark state
@@ -576,11 +574,6 @@ const DevPage = () => {
     }
   }, [isSignedIn, isLoaded]);
 
-  // Monitor character limit
-  useEffect(() => {
-    const totalCharacters = calculateTotalCharacters(messages);
-    setIsCharacterLimitReached(totalCharacters >= MAX_CHARACTERS);
-  }, [messages]);
 
   // Auto-scroll to bottom when messages change, or to docs button when it appears
   useEffect(() => {
@@ -740,6 +733,25 @@ const DevPage = () => {
     try {
       const result = await chatbot(initialMessage, currentMessages, user?.id ?? null); 
       
+      // Handle insufficient credits
+      if (typeof result === 'object' && result.error === 'INSUFFICIENT_CREDITS') {
+        if (result.remainingCredits !== undefined) {
+          notifyCreditsUpdate(result.remainingCredits);
+        }
+        setShowLowSoulsDialog(true);
+        const assistantMessage: ChatMessageType = {
+          id: Date.now().toString(),
+          type: 'assistant',
+          content: 'Your souls count is low. Please upgrade or buy more souls to continue.',
+          timestamp: new Date().toISOString()
+        };
+        const updatedMessages = [...currentMessages, assistantMessage];
+        setMessages(updatedMessages);
+        setIsLoading(false);
+        await updateChatMessages(chatId, updatedMessages);
+        return;
+      }
+      
       // Notify credits update if available
       if (typeof result === 'object' && result.remainingCredits !== undefined) {
         notifyCreditsUpdate(result.remainingCredits);
@@ -831,6 +843,25 @@ const DevPage = () => {
       try {
         const result = await architectureModificationBot(currentInput, messages, architectureData, user?.id ?? null);
         
+        // Handle insufficient credits
+        if (typeof result === 'object' && result.error === 'INSUFFICIENT_CREDITS') {
+          if (result.remainingCredits !== undefined) {
+            notifyCreditsUpdate(result.remainingCredits);
+          }
+          setShowLowSoulsDialog(true);
+          const assistantMessage: ChatMessageType = {
+            id: Date.now().toString(),
+            type: 'assistant',
+            content: 'Your souls count is low. Please upgrade or buy more souls to continue.',
+            timestamp: new Date().toISOString()
+          };
+          const updatedMessages = [...updatedMessagesWithUser, assistantMessage];
+          setMessages(updatedMessages);
+          setIsLoading(false);
+          await updateChatMessages(chatId, updatedMessages);
+          return;
+        }
+        
         // Notify credits update if available
         if (typeof result === 'object' && result.remainingCredits !== undefined) {
           notifyCreditsUpdate(result.remainingCredits);
@@ -884,6 +915,25 @@ const DevPage = () => {
     }else{
       try {
         const result = await chatbot(currentInput, messages, user?.id ?? null);
+        
+        // Handle insufficient credits
+        if (typeof result === 'object' && result.error === 'INSUFFICIENT_CREDITS') {
+          if (result.remainingCredits !== undefined) {
+            notifyCreditsUpdate(result.remainingCredits);
+          }
+          setShowLowSoulsDialog(true);
+          const assistantMessage: ChatMessageType = {
+            id: Date.now().toString(),
+            type: 'assistant',
+            content: 'Your souls count is low. Please upgrade or buy more souls to continue.',
+            timestamp: new Date().toISOString()
+          };
+          const updatedMessages = [...updatedMessagesWithUser, assistantMessage];
+          setMessages(updatedMessages);
+          setIsLoading(false);
+          await updateChatMessages(chatId, updatedMessages);
+          return;
+        }
         
         // Notify credits update if available
         if (typeof result === 'object' && result.remainingCredits !== undefined) {
@@ -2524,6 +2574,13 @@ const DevPage = () => {
         open={showCharacterLimitDialog} 
         onOpenChange={setShowCharacterLimitDialog}
         description="You've reached the maximum token limit for this chat. Upgrade to Pro to unlock extended token limits and continue your conversation."
+      />
+
+      {/* Low Souls Pricing Dialog */}
+      <PricingDialog 
+        open={showLowSoulsDialog} 
+        onOpenChange={setShowLowSoulsDialog}
+        description="Your souls count is low. Please upgrade or buy more souls to continue."
       />
     </div>
   );

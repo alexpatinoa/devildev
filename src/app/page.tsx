@@ -14,7 +14,6 @@ import Link from 'next/link';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import HomeNav from '@/components/core/HomeNav';
 import GithubOAuthDeprecatedNotice from '@/components/GithubOAuthDeprecatedNotice';
-import { maxFreeChats, maxProChats } from '../../Limits';
 import useUserSubscription from '@/hooks/useSubscription';
 import PricingDialog from '@/components/PricingDialog';
 import OpenSourceDialog from '@/components/OpenSrcDialog';
@@ -201,26 +200,12 @@ export default function Page() {
   }, [isSignedIn, isLoaded]);
 
 
-  const returnMaxChats = () => {
-    if(userSubscription) {
-      return maxProChats;
-    }else{
-      return maxFreeChats;
-    }
-  }
-
-
-
   const handleFirstMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!inputMessage.trim()) return;
     
     if (isSignedIn) {
-      if (userChats.length >= returnMaxChats()) {
-        setShowMaxChatsDialog(true);
-        return; 
-      }
       setIsLoading(true); 
       try {
         // Generate UUID for new chat

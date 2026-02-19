@@ -135,8 +135,8 @@ const ProjectPage = () => {
   const [creatingPactType, setCreatingPactType] = useState<PactType>('BUG');
   const [selectedPact, setSelectedPact] = useState<Pact | null>(null);
   const [isCharacterLimitReached, setIsCharacterLimitReached] = useState(false);
-  const [showMaxChatsDialog, setShowMaxChatsDialog] = useState(false);
   const [showCharacterLimitDialog, setShowCharacterLimitDialog] = useState(false);
+  const [showLowSoulsDialog, setShowLowSoulsDialog] = useState(false);
   const [selectedPactType, setSelectedPactType] = useState<'bug' | 'task' | 'feature' | null>(null);
   // Panel resize state
   const [leftPanelWidth, setLeftPanelWidth] = useState(30);
@@ -1213,11 +1213,18 @@ const ProjectPage = () => {
 
         let assistantContent: string;
 
-         // Notify credits update if available
-        if (typeof chatbotResponse === 'object' && chatbotResponse.remainingCredits !== undefined) {
+        // Check for insufficient credits error
+        if (typeof chatbotResponse === 'object' && chatbotResponse.error === 'INSUFFICIENT_CREDITS') {
+          if (chatbotResponse.remainingCredits !== undefined) {
+            notifyCreditsUpdate(chatbotResponse.remainingCredits);
+          }
+          setShowLowSoulsDialog(true);
+          assistantContent = 'Your souls count is low. Please upgrade or buy more souls to continue.';
+        } else if (typeof chatbotResponse === 'object' && chatbotResponse.remainingCredits !== undefined && chatbotResponse.textContent) {
+          // Notify credits update if available
           notifyCreditsUpdate(chatbotResponse.remainingCredits);
           assistantContent = chatbotResponse.textContent;
-        }else{
+        } else {
           if (typeof chatbotResponse === 'string') {
             const trimmed = chatbotResponse.trim();
             const cleaned = trimmed.replace(/^```[\s\S]*?```$/g, '').trim();
@@ -1262,15 +1269,31 @@ const ProjectPage = () => {
 
         
         if (!pactBotResponse || 'error' in pactBotResponse) {
-          // Handle error
-          const errorMessage: ProjectMessage = {
-            id: generateMessageId(),
-            type: 'assistant',
-            content: `Error creating pact: ${pactBotResponse?.error || 'Unknown error occurred'}`,
-            timestamp: new Date().toISOString()
-          };
-          setMessages(prev => [...prev, errorMessage]);
-          await addMessageToProjectChat(projectId, activeChatId, errorMessage);
+          // Check for insufficient credits error
+          if (pactBotResponse?.error === 'INSUFFICIENT_CREDITS') {
+            if (pactBotResponse.remainingCredits !== undefined) {
+              notifyCreditsUpdate(pactBotResponse.remainingCredits);
+            }
+            setShowLowSoulsDialog(true);
+            const errorMessage: ProjectMessage = {
+              id: generateMessageId(),
+              type: 'assistant',
+              content: 'Your souls count is low. Please upgrade or buy more souls to continue.',
+              timestamp: new Date().toISOString()
+            };
+            setMessages(prev => [...prev, errorMessage]);
+            await addMessageToProjectChat(projectId, activeChatId, errorMessage);
+          } else {
+            // Handle other errors
+            const errorMessage: ProjectMessage = {
+              id: generateMessageId(),
+              type: 'assistant',
+              content: `Error creating pact: ${pactBotResponse?.error || 'Unknown error occurred'}`,
+              timestamp: new Date().toISOString()
+            };
+            setMessages(prev => [...prev, errorMessage]);
+            await addMessageToProjectChat(projectId, activeChatId, errorMessage);
+          }
         } else {
           // Notify credits update if available
           if (pactBotResponse.remainingCredits !== undefined) {
@@ -2416,6 +2439,13 @@ const ProjectPage = () => {
         open={showCharacterLimitDialog} 
         onOpenChange={setShowCharacterLimitDialog}
         description="You've reached the maximum token limit for this chat. Upgrade to Pro to unlock extended token limits and continue your conversation."
+      />
+
+      {/* Low Souls Pricing Dialog */}
+      <PricingDialog 
+        open={showLowSoulsDialog} 
+        onOpenChange={setShowLowSoulsDialog}
+        description="Your souls count is low. Please upgrade or buy more souls to continue."
       />
 
     </div>

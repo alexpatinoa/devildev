@@ -13,7 +13,8 @@ import { extractTextContent } from "@/lib/ai/extractTextContent";
 import Parallel from "parallel-web";
 import { DynamicStructuredTool } from "langchain/tools";
 import { z } from "zod";
-import { deductCredits } from "./credits";
+import { deductCredits, getCredits } from "./credits";
+import { minSoulsToSendMessage } from "../Limits";
 const openaiKey = process.env.OPENAI_API_KEY;
 const parallelApiKey = process.env.PARALLEL_API_KEY;
 
@@ -521,6 +522,15 @@ export async function updateProjectMessages(projectId: string, messages: Project
 
 
 export async function projectChatBot( userId: string, userInput: string, projectFramework: string, conversationHistory: any[], projectArchitecture: any){
+     // Check credits before running the agent
+     const creditsResult = await getCredits(userId);
+     if (creditsResult.success && creditsResult.credits !== undefined && creditsResult.credits < minSoulsToSendMessage) {
+         return { 
+             error: 'INSUFFICIENT_CREDITS', 
+             remainingCredits: creditsResult.credits 
+         };
+     }
+
      // Format conversation history for the prompt
      const formattedHistory = conversationHistory.map(msg => 
         `${msg.type === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
@@ -566,6 +576,14 @@ export async function createPactProjectChatBot(
   conversationHistory: any[]
 ) {
   try {
+    // Check credits before running the agent
+    const creditsResult = await getCredits(userId);
+    if (creditsResult.success && creditsResult.credits !== undefined && creditsResult.credits < minSoulsToSendMessage) {
+        return { 
+            error: 'INSUFFICIENT_CREDITS', 
+            remainingCredits: creditsResult.credits 
+        };
+    }
 
     // 2. Fetch Project Data
     const project = await db.project.findUnique({
