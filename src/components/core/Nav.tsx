@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { useUser, SignOutButton } from '@clerk/nextjs';
 import Link from 'next/link';
+import SoulCount from './SoulCount';
 
 interface NavProps {
   setIsFeedbackOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -85,6 +86,9 @@ export default function Nav({ setIsFeedbackOpen, isMCP = false, isProject = fals
               Feedback
             </span>
           </button>
+
+          {/* Soul Count */}
+          <SoulCount />
 
           {/* User Avatar */}
           <div className="flex items-center">

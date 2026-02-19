@@ -4,15 +4,17 @@ import { auth } from "@clerk/nextjs/server";
 import { cache } from "react";
 import { ChatOpenAI } from "@langchain/openai";
 import { PromptTemplate } from "@langchain/core/prompts";
-import { StringOutputParser } from "@langchain/core/output_parsers";
 import { ultraProjectChatBotPrompt, projectChatBotBugPrompt, projectChatBotTaskPrompt, projectChatBotFeaturePrompt } from "../prompts/ReverseArchitecture";
 import { createToolCallingAgent, AgentExecutor } from "langchain/agents";
 import { ChatPromptTemplate, MessagesPlaceholder } from "@langchain/core/prompts";
 import { searchCodeTool, getFileContentTool } from "./github/gitTools";
 import { getInstallationToken } from "./githubAppAuth";
+import { extractTextContent } from "@/lib/ai/extractTextContent";
 import Parallel from "parallel-web";
 import { DynamicStructuredTool } from "langchain/tools";
 import { z } from "zod";
+import { deductCredits, getCredits } from "./credits";
+import { minSoulsToSendMessage } from "../Limits";
 const openaiKey = process.env.OPENAI_API_KEY;
 const parallelApiKey = process.env.PARALLEL_API_KEY;
 
@@ -519,35 +521,68 @@ export async function updateProjectMessages(projectId: string, messages: Project
 }
 
 
-export async function projectChatBot( userInput: string, projectFramework: string, conversationHistory: any[], projectArchitecture: any): Promise<string | { error: string }> {
+export async function projectChatBot( userId: string, userInput: string, projectFramework: string, conversationHistory: any[], projectArchitecture: any){
+     // Check credits before running the agent
+     const creditsResult = await getCredits(userId);
+     if (creditsResult.success && creditsResult.credits !== undefined && creditsResult.credits < minSoulsToSendMessage) {
+         return { 
+             error: 'INSUFFICIENT_CREDITS', 
+             remainingCredits: creditsResult.credits 
+         };
+     }
+
      // Format conversation history for the prompt
      const formattedHistory = conversationHistory.map(msg => 
         `${msg.type === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
-    ).join('\n'); 
+    ).join('\n');   
  
     const prompt = PromptTemplate.fromTemplate(ultraProjectChatBotPrompt);
-    const chain = prompt.pipe(llmWithWeb).pipe(new StringOutputParser());
-    const response = await chain.invoke({
+    const chain = prompt.pipe(llm);
+    const result = await chain.invoke({
         userQuery: userInput,
         framework: projectFramework,
         projectArchitecture: projectArchitecture,
         conversationHistory: formattedHistory
     });
 
-    return response;
+
+    const textContent = extractTextContent(result.content);
+
+    // Deduct credits
+    if (userId) {
+        const inputTokens = result.usage_metadata?.input_tokens ?? 0;
+        const outputTokens = result.usage_metadata?.output_tokens ?? 0;
+        
+        const creditResult = await deductCredits(userId, inputTokens, outputTokens, true);
+        if (!creditResult.success) {
+            console.error("Failed to deduct credits:", creditResult.error);
+            return textContent; 
+        } else {
+            console.log(`Credits deducted: ${creditResult.deducted}, remaining: ${creditResult.remaining}`);
+            return {
+                textContent,
+                remainingCredits: creditResult.remaining,
+                deducted: creditResult.deducted
+            };
+        }
+    }
 }
 
 export async function createPactProjectChatBot(
+  userId: string,
   projectId: string,
   userInput: string,
   pactType: 'BUG' | 'TASK' | 'FEATURE',
   conversationHistory: any[]
-): Promise<{ shortResponse: string; pact: { title: string; body: string } } | { error: string }> {
+) {
   try {
-    // 1. Authentication & Authorization
-    const { userId } = await auth();
-    if (!userId) {
-      return { error: 'Unauthorized' };
+    // Check credits before running the agent
+    const creditsResult = await getCredits(userId);
+    if (creditsResult.success && creditsResult.credits !== undefined && creditsResult.credits < minSoulsToSendMessage) {
+        return { 
+            error: 'INSUFFICIENT_CREDITS', 
+            remainingCredits: creditsResult.credits 
+        };
     }
 
     // 2. Fetch Project Data
@@ -660,8 +695,47 @@ export async function createPactProjectChatBot(
       new MessagesPlaceholder("agent_scratchpad"),
     ]);
 
+    let tokenUsage = {
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+      };
+
+    const trackedLlm = llm.withConfig({
+        callbacks: [
+          {
+            handleLLMEnd(output: any) {
+              const usage =
+                output?.generations?.[0]?.[0]?.generationInfo?.usage ||
+                output?.generations?.[0]?.[0]?.message?.response_metadata?.usage ||
+                output?.llmOutput?.tokenUsage;
+      
+              if (!usage) return;
+      
+              tokenUsage.promptTokens +=
+                usage.prompt_tokens ??
+                usage.promptTokens ??
+                usage.input_tokens ??
+                0;
+      
+              tokenUsage.completionTokens +=
+                usage.completion_tokens ??
+                usage.completionTokens ??
+                usage.output_tokens ??
+                0;
+      
+              tokenUsage.totalTokens +=
+                usage.total_tokens ??
+                usage.totalTokens ??
+                tokenUsage.promptTokens + tokenUsage.completionTokens;
+            },
+          },
+        ],
+      });
+      
+
     const agent = await createToolCallingAgent({
-      llm,
+      llm: trackedLlm,
       tools,
       prompt,
     });
@@ -670,7 +744,7 @@ export async function createPactProjectChatBot(
       agent,
       tools,
       verbose: true,
-      maxIterations: 15, // Reduced to encourage fewer tool calls and lower costs
+      maxIterations: 15,
     });
 
     // 7. Execute Agent
@@ -731,15 +805,26 @@ export async function createPactProjectChatBot(
 //       return { error: 'Generated pact is missing required fields. Please try again.' };
 //     }
 
-     const structuredOutput = JSON.parse(agentResult.output);
+    const structuredOutput = JSON.parse(agentResult.output);
 
-    return {
-      shortResponse: structuredOutput.shortResponse,
-      pact: {
-        title: structuredOutput.pact.title,
-        body: structuredOutput.pact.body
-      }
-    };
+    // Deduct credits
+    if (userId) {
+        const inputTokens = tokenUsage.promptTokens;
+        const outputTokens = tokenUsage.completionTokens;
+        
+        const creditResult = await deductCredits(userId, inputTokens, outputTokens);
+        return {
+            content: {
+                shortResponse: structuredOutput.shortResponse,
+                pact: {
+                  title: structuredOutput.pact.title,
+                  body: structuredOutput.pact.body
+                }
+              },
+            remainingCredits: creditResult.remaining,
+            deducted: creditResult.deducted
+        };
+    }
 
   } catch (error) {
     console.error('Error in createPactProjectChatBot:', error);

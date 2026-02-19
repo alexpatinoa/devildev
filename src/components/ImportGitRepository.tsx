@@ -10,8 +10,9 @@ import Image from 'next/image';
 import { getUserProjects } from '../../actions/reverse-architecture';
 import { fetchUserInstallationIdAndProject } from '../../actions/user';
 import { useUser } from '@clerk/nextjs';
-import { maxNumberOfProjectsFree, maxNumberOfProjectsPro } from '../../Limits';
+import { maxNumberOfProjectsFree, maxNumberOfProjectsPro, minSoulsToGenArch } from '../../Limits';
 import useUserSubscription from '@/hooks/useSubscription';
+import { getCredits } from '../../actions/credits';
 import PricingDialog from './PricingDialog';
 import languageColors from 'github-language-colors';
 // Removed card and glow imports for a minimalist view
@@ -112,6 +113,8 @@ export default function ImportGitRepository({ onImport }: ImportGitRepositoryPro
   const [pasteLoading, setPasteLoading] = useState(false);
   const [pasteError, setPasteError] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState<any | null>(null);
+  const [credits, setCredits] = useState<number | null>(null);
+  const [showLowSoulsDialog, setShowLowSoulsDialog] = useState(false);
   const { userSubscription, isLoadingUserSubscription, isErrorUserSubscription } = useUserSubscription();
 
   useEffect(() => {
@@ -119,6 +122,25 @@ export default function ImportGitRepository({ onImport }: ImportGitRepositoryPro
       fetchEmAll();
     }
   }, [user?.id]);
+
+  useEffect(() => {
+    if (user?.id) {
+      getCredits(user.id).then((result) => {
+        if (result.success && result.credits !== undefined) {
+          setCredits(result.credits);
+        }
+      });
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    const handleCreditsUpdate = (event: Event) => {
+      const e = event as CustomEvent<{ remaining: number }>;
+      setCredits(e.detail?.remaining ?? null);
+    };
+    window.addEventListener('credits-updated', handleCreditsUpdate);
+    return () => window.removeEventListener('credits-updated', handleCreditsUpdate);
+  }, []);
 
   useEffect(() => {
     if (installationId) {
@@ -193,6 +215,10 @@ export default function ImportGitRepository({ onImport }: ImportGitRepositoryPro
     }
   };
 
+  const hasInsufficientSoulsForImport = (): boolean => {
+    return credits !== null && credits < minSoulsToGenArch;
+  };
+
   const fetchRepos = async (search?: string) => {
 
     // Only fetch when the user is connected to GitHub or we have an installationId
@@ -227,6 +253,10 @@ export default function ImportGitRepository({ onImport }: ImportGitRepositoryPro
 
   const handleImportByUrl = async () => {
     if (hasReachedProjectLimit()) return;
+    if (hasInsufficientSoulsForImport()) {
+      setShowLowSoulsDialog(true);
+      return;
+    }
     setPasteError(null);
     const fullName = parseRepoFullName(pasteUrl);
     if (!fullName) {
@@ -308,12 +338,21 @@ export default function ImportGitRepository({ onImport }: ImportGitRepositoryPro
     if (hasReachedProjectLimit()) {
       return; // Don't open dialog if limit is reached
     }
+    if (hasInsufficientSoulsForImport()) {
+      setShowLowSoulsDialog(true);
+      return;
+    }
     setSelectedRepo(repo);
     setIsConfirmOpen(true);
   };
 
   const confirmImport = async () => {
     if (!selectedRepo) return;
+    if (hasInsufficientSoulsForImport()) {
+      setShowLowSoulsDialog(true);
+      setIsConfirmOpen(false);
+      return;
+    }
     setIsConfirmOpen(false);
     await handleImport(selectedRepo);
     setSelectedRepo(null);
@@ -449,7 +488,7 @@ export default function ImportGitRepository({ onImport }: ImportGitRepositoryPro
             />
             <Button
               onClick={handleImportByUrl}
-              disabled={pasteLoading || hasReachedProjectLimit() || projectsLoading}
+              disabled={pasteLoading || hasReachedProjectLimit() || hasInsufficientSoulsForImport() || projectsLoading}
               className="bg-gradient-to-r w-1/5 from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white whitespace-nowrap"
             >
               {pasteLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Import via Link'}
@@ -479,7 +518,7 @@ export default function ImportGitRepository({ onImport }: ImportGitRepositoryPro
           <Button
               onClick={() => window.location.href = '/api/github/auth'}
               variant="outline"
-              className="border-white/20 text-black w-1/5 hover:bg-white/10 hover:border-white/40 hover:text-white"
+              className="border-white/20 text-white w-1/5 bg-white/5 hover:bg-white/10 hover:border-white/40"
             >
               {/* <Github className="w-4 h-4 mr-2" /> */}
               Configure GitHub
@@ -495,7 +534,7 @@ export default function ImportGitRepository({ onImport }: ImportGitRepositoryPro
                 }}
                 variant="outline"
                 size="sm"
-                className="border-white/20 text-black hover:text-white hover:bg-white/10 hover:border-white/40"
+                className="border-white/20 text-white bg-white/5 hover:bg-white/10 hover:border-white/40"
               >
                 Clear Search
               </Button>
@@ -595,7 +634,7 @@ export default function ImportGitRepository({ onImport }: ImportGitRepositoryPro
                               variant="outline"
                               size="sm"
                               onClick={() => window.open(`https://github.com/${repo.fullName}`, '_blank')}
-                              className="border-white/20 text-black hover:bg-white/69 hover:border-white/40"
+                              className="border-white/20 text-white bg-white/5 hover:bg-white/10 hover:border-white/40"
                             >
                               <ExternalLink className="w-4 h-4" />
                             </Button>
@@ -611,7 +650,7 @@ export default function ImportGitRepository({ onImport }: ImportGitRepositoryPro
                             ) : (
                               <Button
                                 onClick={() => openConfirmDialog(repo)}
-                                disabled={importing === repo.id || projectsLoading || hasReachedProjectLimit()}
+                                disabled={importing === repo.id || projectsLoading || hasReachedProjectLimit() || hasInsufficientSoulsForImport()}
                                 size="sm"
                                 className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white transition-all duration-200 font-semibold min-w-[80px] disabled:opacity-50 disabled:cursor-not-allowed"
                               >
@@ -619,6 +658,8 @@ export default function ImportGitRepository({ onImport }: ImportGitRepositoryPro
                                   <Loader2 className="h-4 w-4 animate-spin" />
                                 ) : hasReachedProjectLimit() ? (
                                   'Limit Reached'
+                                ) : hasInsufficientSoulsForImport() ? (
+                                  'Low Souls'
                                 ) : (
                                   'Import'
                                 )}
@@ -649,7 +690,7 @@ export default function ImportGitRepository({ onImport }: ImportGitRepositoryPro
               <Button
                 variant="outline"
                 onClick={cancelImport}
-                className="border-white/20 text-black hover:text-white hover:bg-white/10 hover:border-white/40"
+                className="border-white/20 text-white bg-white/5 hover:bg-white/10 hover:border-white/40"
               >
                 Cancel
               </Button>
@@ -664,6 +705,11 @@ export default function ImportGitRepository({ onImport }: ImportGitRepositoryPro
           </div>
         </div>
       )}
+      <PricingDialog
+        open={showLowSoulsDialog}
+        onOpenChange={setShowLowSoulsDialog}
+        description="Your souls count is low. Please upgrade or buy more souls to continue."
+      />
       </div>
     </div>
     </div>

@@ -13,24 +13,23 @@ import { useRouter } from "next/navigation"
 import { useSubscriptionHandler } from "@/hooks/useSubscriptionHandler"
 
 export default function PricingPage() {
-  const { userSubscription, isLoadingUserSubscription, isErrorUserSubscription } = useUserSubscription();
+  const { userSubscription } = useUserSubscription();
     const { user } = useUser();
    
     const router = useRouter();
     const handleSubscription = useSubscriptionHandler();
     
     const freeFeatures = [
-        "Up to 3 Chats",
-        "Only 1 Project",
-        "Limited token limit for each chat",
+        "Limited Size Limit for project architecture",
+        "Only 250 Souls per month",
+        "No Souls rollover",
     ]
 
     const proFeatures = [
       "Extended size limit for project architecture",
-      "Up to 100 chats per project",
-      "Up to 10 Projects",
-      "Extended token limit for each chat",
-      "Up to 100 Chats",
+      "Get 10,000 Souls every month",
+      "Souls rollover every month",
+      "Support DevilDev - oss",
     ]
 
     return (

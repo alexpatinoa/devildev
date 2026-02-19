@@ -9,7 +9,9 @@ import { getFileContentTool, searchCodeTool, getFilePatchTool } from './github/g
 import { getInstallationToken } from './githubAppAuth';
 import { createToolCallingAgent, AgentExecutor } from "langchain/agents";
 import { ChatPromptTemplate, MessagesPlaceholder } from "@langchain/core/prompts";
-import { maxFreeArchitectureRegenerations } from '../Limits';
+import { maxFreeArchitectureRegenerations, minSoulsToGenArch } from '../Limits';
+import { deductCredits, getCredits } from './credits';
+import { BaseCallbackHandler } from "@langchain/core/callbacks/base";
 const { inngest } = await import('../src/inngest/client');
 
 const openaiKey = process.env.OPENAI_API_KEY;
@@ -133,6 +135,35 @@ const architectureOutputSchema = {
   required: ["components", "connectionLabels", "architectureRationale"]
 } as const; 
 
+// Callback handler to track token usage across all LLM calls
+class TokenUsageCallbackHandler extends BaseCallbackHandler {
+  name = "token_usage_handler";
+  totalInputTokens = 0;
+  totalOutputTokens = 0;
+
+  async handleLLMEnd(output: any) {
+    // Extract token usage from the LLM response
+    if (output.llmOutput?.tokenUsage) {
+      const usage = output.llmOutput.tokenUsage;
+      this.totalInputTokens += usage.promptTokens || 0;
+      this.totalOutputTokens += usage.completionTokens || 0;
+    }
+    
+    // Also check for usage in generations
+    if (output.generations?.[0]?.[0]?.generationInfo?.usage) {
+      const usage = output.generations[0][0].generationInfo.usage;
+      this.totalInputTokens += usage.prompt_tokens || usage.input_tokens || 0;
+      this.totalOutputTokens += usage.completion_tokens || usage.output_tokens || 0;
+    }
+  }
+
+  getUsage() {
+    return {
+      inputTokens: this.totalInputTokens,
+      outputTokens: this.totalOutputTokens
+    };
+  }
+}
 
 export async function checkInfo(repositoryId: string, repoFullName: string){
   
@@ -562,7 +593,7 @@ export async function getRepoTree(projectId: string) {
   }
 }
  
-export async function generateArchitecture(projectId: string, repoTree?: any){
+export async function generateArchitecture(projectId: string, repoTree?: any, userId?: string | null){
 
     const project = await db.project.findUnique({
         where: { id: projectId},
@@ -620,6 +651,9 @@ export async function generateArchitecture(projectId: string, repoTree?: any){
                 ? project.detailedAnalysis
                 : JSON.stringify(project.detailedAnalysis);
 
+            // Create token usage handler for tracking
+            const tokenUsageHandler = new TokenUsageCallbackHandler();
+
             const finalPrompt = PromptTemplate.fromTemplate(mainGenerateArchitecturePrompt2);
             const structuredLlm = llm.withStructuredOutput(architectureOutputSchema);
             const finalChain = finalPrompt.pipe(structuredLlm);
@@ -628,7 +662,19 @@ export async function generateArchitecture(projectId: string, repoTree?: any){
                 name: name,
                 framework: framework,
                 repoTree: repoTree ? JSON.stringify(repoTree) : 'Not provided'
-            });
+            }, { callbacks: [tokenUsageHandler] });
+
+            // Deduct credits if userId is provided
+            if (userId) {
+                const usage = tokenUsageHandler.getUsage();
+                const creditResult = await deductCredits(userId, usage.inputTokens, usage.outputTokens);
+                if (!creditResult.success) {
+                    console.error("Failed to deduct credits:", creditResult.error);
+                } else {
+                    console.log(`Credits deducted: ${creditResult.deducted}, remaining: ${creditResult.remaining}`);
+                    console.log(`Total tokens used - Input: ${usage.inputTokens}, Output: ${usage.outputTokens}`);
+                }
+            }
 
             return { architecture: architecture, detailedAnalysis: existingAnalysisString };
         } catch (error) {
@@ -778,6 +824,9 @@ Start your analysis now.`],
       new MessagesPlaceholder("agent_scratchpad")
     ]);
     
+    // Create token usage handler for tracking
+    const tokenUsageHandler = new TokenUsageCallbackHandler();
+
     // Create agent executor
     const agent = await createToolCallingAgent({
         llm,
@@ -804,7 +853,7 @@ Start your analysis now.`],
             defaultBranch: defaultBranch || 'main',
             githubAccessToken: resolvedAccessToken,
             repoTree: repoTree ? JSON.stringify(repoTree) : 'Not provided'
-        });
+        }, { callbacks: [tokenUsageHandler] });
         
         const detailedAnalysis = await db.project.update({
             where: { id: projectId },
@@ -822,7 +871,19 @@ Start your analysis now.`],
             name: name,
             framework: framework,
             repoTree: repoTree ? JSON.stringify(repoTree) : 'Not provided'
-        });
+        }, { callbacks: [tokenUsageHandler] });
+
+        // Deduct credits if userId is provided
+        if (userId) {
+            const usage = tokenUsageHandler.getUsage();
+            const creditResult = await deductCredits(userId, usage.inputTokens, usage.outputTokens);
+            if (!creditResult.success) {
+                console.error("Failed to deduct credits:", creditResult.error);
+            } else {
+                console.log(`Credits deducted: ${creditResult.deducted}, remaining: ${creditResult.remaining}`);
+                console.log(`Total tokens used - Input: ${usage.inputTokens}, Output: ${usage.outputTokens}`);
+            }
+        }
 
         return {architecture: architecture, detailedAnalysis: JSON.stringify(analysisResult.output)};
 
@@ -883,6 +944,12 @@ export async function triggerReverseArchitectureGeneration(data: {
   activeChatId: string | null;
   userId: string;
 }) {
+  // Check credits before triggering Inngest
+  const creditsResult = await getCredits(data.userId);
+  if (creditsResult.success && creditsResult.credits !== undefined && creditsResult.credits < minSoulsToGenArch) {
+    return { success: false, error: 'INSUFFICIENT_CREDITS', remainingCredits: creditsResult.credits };
+  }
+
   try {
     
     
@@ -1036,8 +1103,9 @@ export async function regeneratePushedArchitecture(args: {
   }>;
   latestArchitecture: any;
   repoTree: any;
+  userId?: string;
 }) {
-  const { projectId, repoFullName, beforeCommit, afterCommit, exactFilesChanges, latestArchitecture, repoTree } = args;
+  const { projectId, repoFullName, beforeCommit, afterCommit, exactFilesChanges, latestArchitecture, repoTree, userId } = args;
 
   try {
     // Fetch project details
@@ -1066,6 +1134,9 @@ export async function regeneratePushedArchitecture(args: {
 
     // Create tools for the agent
     const tools = [getFilePatchTool, getFileContentTool];
+
+    // Create token usage handler for tracking
+    const tokenUsageHandler = new TokenUsageCallbackHandler();
 
     // Create the prompt for architecture regeneration
     const prompt = ChatPromptTemplate.fromMessages([
@@ -1100,7 +1171,7 @@ export async function regeneratePushedArchitecture(args: {
       beforeCommit,
       afterCommit,
       accessToken,
-    });
+    }, { callbacks: [tokenUsageHandler] });
 
     // Use structured output agent to format the result
     const formatterPrompt = PromptTemplate.fromTemplate(regeneratePushedArchitectureFormatterPrompt);
@@ -1109,11 +1180,23 @@ export async function regeneratePushedArchitecture(args: {
 
     const parsedArchitecture = await formatterChain.invoke({
       agentOutput: result.output,
-    });
+    }, { callbacks: [tokenUsageHandler] });
 
     // Validate required fields
     if (!parsedArchitecture.components || !parsedArchitecture.architectureRationale) {
       throw new Error('Invalid architecture structure - missing required fields');
+    }
+
+    // Deduct credits if userId is provided
+    if (userId) {
+      const usage = tokenUsageHandler.getUsage();
+      const creditResult = await deductCredits(userId, usage.inputTokens, usage.outputTokens);
+      if (!creditResult.success) {
+        console.error("Failed to deduct credits:", creditResult.error);
+      } else {
+        console.log(`Credits deducted: ${creditResult.deducted}, remaining: ${creditResult.remaining}`);
+        console.log(`Total tokens used - Input: ${usage.inputTokens}, Output: ${usage.outputTokens}`);
+      }
     }
 
     return { success: true, architecture: parsedArchitecture };

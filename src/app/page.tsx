@@ -14,11 +14,10 @@ import Link from 'next/link';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import HomeNav from '@/components/core/HomeNav';
 import GithubOAuthDeprecatedNotice from '@/components/GithubOAuthDeprecatedNotice';
-import { maxFreeChats, maxProChats } from '../../Limits';
 import useUserSubscription from '@/hooks/useSubscription';
 import PricingDialog from '@/components/PricingDialog';
-import { cn } from '@/lib/utils';
 import OpenSourceDialog from '@/components/OpenSrcDialog';
+import WelcomeDialog from '@/components/WelcomeDialog';
 import AnimatedGradientText from '@/components/AnimatedGradientText';
 
 
@@ -73,6 +72,7 @@ export default function Page() {
   const isMobile = useMediaQuery('(max-width: 640px)'); 
   const [showMaxChatsDialog, setShowMaxChatsDialog] = useState(false);
   const [isOpenSourceDialogOpen, setIsOpenSourceDialogOpen] = useState(false);
+  const [isWelcomeDialogOpen, setIsWelcomeDialogOpen] = useState(false);
   // Typewriter rotating heading state
   const rotatingTexts = ["Visualize your Codebase","10x your vibe coding"];
   const [currentRotateIndex, setCurrentRotateIndex] = useState(0);
@@ -164,6 +164,14 @@ export default function Page() {
 
   // Fetch chats and GitHub status when user is signed in
   useEffect(() => {
+    // Check for signup parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('signup') === 'true') {
+      setIsWelcomeDialogOpen(true);
+      // Remove the parameter from URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
     // Only show the Open Source dialog once per user (per browser)
     try {
       const hasSeenOpenSourceDialog = localStorage.getItem('hasSeenOpenSourceDialog');
@@ -181,7 +189,6 @@ export default function Page() {
     }
     
     // Check for GitHub connection success
-    const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('github_connected') === 'true') {
       // Remove the parameter from URL
       window.history.replaceState({}, document.title, window.location.pathname);
@@ -193,26 +200,12 @@ export default function Page() {
   }, [isSignedIn, isLoaded]);
 
 
-  const returnMaxChats = () => {
-    if(userSubscription) {
-      return maxProChats;
-    }else{
-      return maxFreeChats;
-    }
-  }
-
-
-
   const handleFirstMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!inputMessage.trim()) return;
     
     if (isSignedIn) {
-      if (userChats.length >= returnMaxChats()) {
-        setShowMaxChatsDialog(true);
-        return; 
-      }
       setIsLoading(true); 
       try {
         // Generate UUID for new chat
@@ -279,6 +272,12 @@ export default function Page() {
               console.error('Error setting Open Source dialog flag in localStorage:', error);
             }
             setIsOpenSourceDialogOpen(false);
+          }}
+        />
+        <WelcomeDialog
+          isOpen={isWelcomeDialogOpen}
+          onClose={() => {
+            setIsWelcomeDialogOpen(false);
           }}
         />
         {/* Mobile/Tablet Navbar */}
@@ -545,7 +544,7 @@ export default function Page() {
                     <div className="flex items-center justify-center px-6 py-4">
                       <Loader2 className="h-4 w-4 animate-spin text-red-400/60" />
                     </div>
-                  ) : userChats.length > 0 ? (
+                  ) : userChats.length > 0 ? ( 
                     userChats.map((chat) => (
                       <button
                         key={chat.id}

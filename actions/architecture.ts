@@ -16,6 +16,9 @@ import { notificationComponentsTool } from "./architecture/notificationComponent
 import { paymentComponentsTool } from "./architecture/paymentComponents";
 import { realtimeComponentsTool } from "./architecture/realtimeComponents";
 import { basicWebComponentsTool } from "./architecture/webComponents";
+import { deductCredits, getCredits } from "./credits";
+import { minSoulsToGenArch } from "../Limits";
+import { BaseCallbackHandler } from "@langchain/core/callbacks/base";
 const { inngest } = await import('../src/inngest/client');
 
 
@@ -395,11 +398,14 @@ export async function triggerArchitectureGeneration(data: {
   componentPositions: any;
   userId: string;
 }) {
-  
+  // Check credits before triggering Inngest
+  const creditsResult = await getCredits(data.userId);
+  if (creditsResult.success && creditsResult.credits !== undefined && creditsResult.credits < minSoulsToGenArch) {
+    return { success: false, error: 'INSUFFICIENT_CREDITS', remainingCredits: creditsResult.credits };
+  }
+
   try {
     // Import inngest dynamically to avoid client-side bundling
-    
-    
     const response = await inngest.send({
       name: "architecture/generate",
       data: data
@@ -484,7 +490,34 @@ const architectureJsonSchema = {
   required: ["components", "connectionLabels", "architectureRationale"]
 };
 
-export async function generateArchitectureWithToolCalling(requirement: string, conversationHistory: any[] = [], architectureData: any){
+// Callback handler to track token usage across all LLM calls
+class TokenUsageCallbackHandler extends BaseCallbackHandler {
+  name = "token_usage_handler";
+  totalInputTokens = 0;
+  totalOutputTokens = 0;
+
+  async handleLLMEnd(output: any) {
+    // Extract token usage from the LLM response
+    if (output.llmOutput?.tokenUsage) {
+      const usage = output.llmOutput.tokenUsage;
+      this.totalInputTokens += usage.promptTokens || 0;
+      this.totalOutputTokens += usage.completionTokens || 0;
+    }else if (output.generations?.[0]?.[0]?.generationInfo?.usage) {
+      const usage = output.generations[0][0].generationInfo.usage;
+      this.totalInputTokens += usage.prompt_tokens || usage.input_tokens || 0;
+      this.totalOutputTokens += usage.completion_tokens || usage.output_tokens || 0;
+    }
+  }
+
+  getUsage() {
+    return {
+      inputTokens: this.totalInputTokens,
+      outputTokens: this.totalOutputTokens
+    };
+  }
+}
+
+export async function generateArchitectureWithToolCalling(requirement: string, conversationHistory: any[] = [], architectureData: any, userId: string | null = null){
   // Format conversation history for the prompt
   const formattedHistory = conversationHistory.map(msg => 
     `${msg.type === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
@@ -694,6 +727,9 @@ const finalChain = finalPrompt.pipe(structuredLlm);
 
 const tools = [basicWebComponentsTool, aimlComponentsTool, analyticsComponentsTool, authComponentsTool, blockchainComponentsTool, databaseComponentsTool, mobileComponentsTool, notificationComponentsTool, paymentComponentsTool, realtimeComponentsTool];
 
+// Create token usage callback handler to track usage across all LLM calls
+const tokenUsageHandler = new TokenUsageCallbackHandler();
+
 const agent = await createToolCallingAgent({
   llm,
   tools,
@@ -708,13 +744,37 @@ const agentExecutor = new AgentExecutor({
 });
 
 try {
-  const result = await agentExecutor.invoke({
-    requirement: requirement,
-    conversation_history: formattedHistory,
-    architecture_data: JSON.stringify(architectureData)
-  });
+  const result = await agentExecutor.invoke(
+    {
+      requirement: requirement,
+      conversation_history: formattedHistory,
+      architecture_data: JSON.stringify(architectureData)
+    },
+    { callbacks: [tokenUsageHandler] }
+  );
   
-  const finalResult = await finalChain.invoke({requirement: requirement, conversation_history: formattedHistory, architectureData: JSON.stringify(architectureData), list_of_required_stacks: JSON.stringify(result.output)});
+  const finalResult = await finalChain.invoke(
+    {
+      requirement: requirement, 
+      conversation_history: formattedHistory, 
+      architectureData: JSON.stringify(architectureData), 
+      list_of_required_stacks: JSON.stringify(result.output)
+    },
+    { callbacks: [tokenUsageHandler] }
+  );
+  
+  // Deduct credits if userId is provided
+  if (userId) {
+    const usage = tokenUsageHandler.getUsage();
+    const creditResult = await deductCredits(userId, usage.inputTokens, usage.outputTokens);
+    if (!creditResult.success) {
+      console.error("Failed to deduct credits:", creditResult.error);
+    } else {
+      console.log(`Credits deducted: ${creditResult.deducted}, remaining: ${creditResult.remaining}`);
+      console.log(`Total tokens used - Input: ${usage.inputTokens}, Output: ${usage.outputTokens}`);
+    }
+  }
+  
   return finalResult;
  
 } catch (error) {

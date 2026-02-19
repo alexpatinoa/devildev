@@ -26,7 +26,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   onOpenTab,
   showQuickActions = false,
   placeholder = 'Ask about your project...',
-  maxLength = 5000,
+  maxLength,
   selectedPactType,
   onPactSelect,
 }) => {

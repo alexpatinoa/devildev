@@ -3,6 +3,7 @@ import { Webhook } from 'svix';
 import { headers } from 'next/headers';
 import { WebhookEvent } from '@clerk/nextjs/server';
 import { db } from '@/lib/db';
+import { signUpInitialSouls } from '../../../../../Limits';
 
 export async function POST(req: NextRequest) {
   ;
@@ -11,8 +12,6 @@ export async function POST(req: NextRequest) {
   if (!WEBHOOK_SECRET) { 
     throw new Error('Please add CLERK_WEBHOOK_SECRET from Clerk Dashboard to .env or .env.local');
   }
-
-  ;
 
   // Get the headers
   const headerPayload = await headers();
@@ -43,7 +42,6 @@ export async function POST(req: NextRequest) {
 
   // Verify the payload with the headers
   try {
-    ;
     evt = wh.verify(payload, {
       'svix-id': svix_id,
       'svix-timestamp': svix_timestamp,
@@ -56,16 +54,12 @@ export async function POST(req: NextRequest) {
       status: 400,
     });
   }
-  ;
-
   // Get the ID and type
   const { id } = evt.data;
   const eventType = evt.type;
 
-  ;     
   // Handle the webhook
   try {
-    ;
     if (eventType === 'user.created') {
       const { id, email_addresses, first_name, last_name, username } = evt.data;
       
@@ -86,14 +80,12 @@ export async function POST(req: NextRequest) {
           email: primaryEmail.email_address,
           name: first_name && last_name ? `${first_name} ${last_name}` : first_name || last_name || null,
           username: username || null,
+          credits: signUpInitialSouls,
         },
       });
       ;
 
     }
-
-    ;
-
     if (eventType === 'user.updated') {
       const { id, email_addresses, first_name, last_name, username } = evt.data;
 
@@ -121,7 +113,6 @@ export async function POST(req: NextRequest) {
       ;
 
     }
-
     if (eventType === 'user.deleted') {
       const { id } = evt.data;
       
@@ -135,7 +126,6 @@ export async function POST(req: NextRequest) {
       ;
 
     }
-
     return new NextResponse('', { status: 200 });
   } catch (error) {
     console.error('Error handling webhook:', error);

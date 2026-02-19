@@ -34,7 +34,6 @@ export class SubscriptionService {
           status: data.status,
           productId: data.productId,
           quantity: 1,
-          // Price is $25 as per product configuration
           currency: 'USD',
           currentPeriodEnd: data.currentPeriodEnd,
         },
@@ -42,12 +41,19 @@ export class SubscriptionService {
 
       // Update user's subscription plan based on status
       const userPlan = data.status === SubscriptionStatus.ACTIVE ? SubscriptionPlan.PRO : SubscriptionPlan.FREE;
+      const userSouls = await db.user.findUnique({
+        where: { id: data.userId },
+        select: { credits: true },
+      });
+      const currentSouls = userSouls?.credits ?? 0;
+      const soulsToAdd = userPlan === SubscriptionPlan.PRO ? 10000 : 0;
+      const newSouls = currentSouls + soulsToAdd;
+
       await db.user.update({
         where: { id: data.userId },
-        data: { subscriptionPlan: userPlan },
+        data: { subscriptionPlan: userPlan, credits: newSouls },
       });
-      
-      ;
+
       return subscription;
     } catch (error) {
       console.error('Error upserting subscription:', error);

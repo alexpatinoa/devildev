@@ -57,6 +57,7 @@ model User {
   githubUsername    String?   @unique
   isGithubConnected Boolean   @default(false)
   isGithubAppConnected Boolean   @default(false)
+  credits Int @default(200)
   chats             Chat[]
   subscription Subscription?
   subscriptionPlan   SubscriptionPlan   @default(FREE)

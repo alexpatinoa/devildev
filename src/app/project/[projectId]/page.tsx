@@ -3,8 +3,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useParams, useRouter } from "next/navigation";
-import { Maximize, X, Menu, MessageCircle, Plus, Loader2, MessageSquare, BrainCircuit, FolderKanban, ChevronDown, ChevronRight, Folder, FolderOpen, File, Bug, ListTodo, Sparkles, GripVertical } from 'lucide-react';
+import { Maximize, X, Menu, MessageCircle, Plus, Loader2, MessageSquare, FolderKanban, ChevronDown, ChevronRight, Folder, FolderOpen, File, Bug, ListTodo, Sparkles, GripVertical } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import SoulCount from '../../../components/core/SoulCount';
 import { getProject, updateProjectComponentPositions, ProjectMessage, projectChatBot, createProjectChat, getProjectChat, addMessageToProjectChat, createPactProjectChatBot } from "../../../../actions/project";
 import { SignOutButton, useUser } from '@clerk/nextjs';
 import { ChatMessageList, ChatInput, ChatHeader } from '@/components/Project';
@@ -19,9 +20,10 @@ import { ProjectPageSkeleton } from '@/components/ui/project-skeleton';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { submitFeedback } from '../../../../actions/feedback';
-import { maxChatCharactersLimitFree, maxChatCharactersLimitPro, maxNumberOfProjectChatsFree, maxNumberOfProjectChatsPro } from '../../../../Limits';
+import { maxChatCharactersLimitFree, maxChatCharactersLimitPro} from '../../../../Limits';
 import useUserSubscription from '@/hooks/useSubscription';
 import PricingDialog from '@/components/PricingDialog';
+import { notifyCreditsUpdate, refetchCredits } from '@/lib/credits-events';
 
 interface ProjectChat {
   id: bigint;
@@ -133,8 +135,8 @@ const ProjectPage = () => {
   const [creatingPactType, setCreatingPactType] = useState<PactType>('BUG');
   const [selectedPact, setSelectedPact] = useState<Pact | null>(null);
   const [isCharacterLimitReached, setIsCharacterLimitReached] = useState(false);
-  const [showMaxChatsDialog, setShowMaxChatsDialog] = useState(false);
   const [showCharacterLimitDialog, setShowCharacterLimitDialog] = useState(false);
+  const [showLowSoulsDialog, setShowLowSoulsDialog] = useState(false);
   const [selectedPactType, setSelectedPactType] = useState<'bug' | 'task' | 'feature' | null>(null);
   // Panel resize state
   const [leftPanelWidth, setLeftPanelWidth] = useState(30);
@@ -170,7 +172,6 @@ const ProjectPage = () => {
       const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
       const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
       const { userSubscription, isLoadingUserSubscription, isErrorUserSubscription } = useUserSubscription();
-      const [MAX_CHATS, setMAX_CHATS] = useState(0);
       const [MAX_CHARACTERS, setMAX_CHARACTERS] = useState(0);
  
       // Function to handle feedback submission
@@ -651,6 +652,11 @@ const ProjectPage = () => {
         
         if (result.success && result.exists && result.architecture) {
           
+          // Refetch credits after background job completes
+          if (user?.id) {
+            await refetchCredits(user.id);
+          }
+          
           // Reload the page to show the generated architecture
           window.location.reload();
           return;
@@ -686,7 +692,6 @@ const ProjectPage = () => {
   }, []);
 
   useEffect(() => {
-    setMAX_CHATS(userSubscription ? maxNumberOfProjectChatsPro : maxNumberOfProjectChatsFree);
     setMAX_CHARACTERS(userSubscription ? maxChatCharactersLimitPro : maxChatCharactersLimitFree);
   }, [userSubscription]);
 
@@ -809,10 +814,7 @@ const ProjectPage = () => {
   const handleCreateNewChat = async () => {
 
     if(isChatLoading || isArchitectureGenerating || messages.length === 0 || isLoadingUserSubscription) return;
-    if (projectChats.length >= MAX_CHATS) {
-      setShowMaxChatsDialog(true);
-      return;
-    }
+
 
     // Optimistic UI: add a temporary chat and switch immediately
     const tempId = `temp-${Date.now()}`;
@@ -1037,6 +1039,12 @@ const ProjectPage = () => {
                   if (result.success) {
                     // Start polling for the architecture
                     pollForProjectArchitecture();
+                  } else if (result.error === 'INSUFFICIENT_CREDITS') {
+                    if (result.remainingCredits !== undefined) {
+                      notifyCreditsUpdate(result.remainingCredits);
+                    }
+                    setShowLowSoulsDialog(true);
+                    setIsArchitectureGenerating(false);
                   } else {
                     console.error('Failed to trigger architecture generation:', result.error);
                     setIsArchitectureGenerating(false);
@@ -1155,6 +1163,7 @@ const ProjectPage = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user?.id) return;
     if (!inputMessage.trim() || isChatLoading || isCreatingChat || !activeChatId) return;
     if (isCharacterLimitReached) {
       setShowCharacterLimitDialog(true);
@@ -1168,10 +1177,8 @@ const ProjectPage = () => {
       timestamp: new Date().toISOString()
     };
 
-
     // Add user message to local state immediately
     setMessages(prevMessages => [...prevMessages, userMessage]);
-
     
     const currentInput = inputMessage;
     setInputMessage('');
@@ -1201,22 +1208,36 @@ const ProjectPage = () => {
       if (selectedPactType === null) {
         // EXISTING FLOW: Regular chatbot
         const chatbotResponse = await projectChatBot(
+          user.id,
           currentInput.trim(),
           project.framework,
           messages,
           architectureData,
         );
 
-        // Ensure we always end up with a plain text assistant response
         let assistantContent: string;
-        if (typeof chatbotResponse === 'string') {
-          const trimmed = chatbotResponse.trim();
-          const cleaned = trimmed.replace(/^```[\s\S]*?```$/g, '').trim();
-          assistantContent = cleaned || trimmed;
-        } else if (chatbotResponse && 'error' in chatbotResponse) {
-          assistantContent = `Sorry, there was an error: ${chatbotResponse.error}`;
+
+        // Check for insufficient credits error
+        if (typeof chatbotResponse === 'object' && chatbotResponse.error === 'INSUFFICIENT_CREDITS') {
+          if (chatbotResponse.remainingCredits !== undefined) {
+            notifyCreditsUpdate(chatbotResponse.remainingCredits);
+          }
+          setShowLowSoulsDialog(true);
+          assistantContent = 'Your souls count is low. Please upgrade or buy more souls to continue.';
+        } else if (typeof chatbotResponse === 'object' && chatbotResponse.remainingCredits !== undefined && chatbotResponse.textContent) {
+          // Notify credits update if available
+          notifyCreditsUpdate(chatbotResponse.remainingCredits);
+          assistantContent = chatbotResponse.textContent;
         } else {
-          assistantContent = 'Sorry, there was an issue generating a response.';
+          if (typeof chatbotResponse === 'string') {
+            const trimmed = chatbotResponse.trim();
+            const cleaned = trimmed.replace(/^```[\s\S]*?```$/g, '').trim();
+            assistantContent = cleaned || trimmed;
+          } else if (chatbotResponse && 'error' in chatbotResponse) {
+            assistantContent = `Sorry, there was an error: ${chatbotResponse.error}`;
+          } else {
+            assistantContent = 'Sorry, there was an issue generating a response.';
+          }
         }
 
         // For now, just add a simple response
@@ -1243,41 +1264,64 @@ const ProjectPage = () => {
         const pactType = pactTypeMapping[selectedPactType];
         
         const pactBotResponse = await createPactProjectChatBot(
+          user.id,
           projectId,
           currentInput.trim(),
           pactType,
           messages
         );
+
         
-        if ('error' in pactBotResponse) {
-          // Handle error
-          const errorMessage: ProjectMessage = {
-            id: generateMessageId(),
-            type: 'assistant',
-            content: `Error creating pact: ${pactBotResponse.error}`,
-            timestamp: new Date().toISOString()
-          };
-          setMessages(prev => [...prev, errorMessage]);
-          await addMessageToProjectChat(projectId, activeChatId, errorMessage);
+        if (!pactBotResponse || 'error' in pactBotResponse) {
+          // Check for insufficient credits error
+          if (pactBotResponse?.error === 'INSUFFICIENT_CREDITS') {
+            if (pactBotResponse.remainingCredits !== undefined) {
+              notifyCreditsUpdate(pactBotResponse.remainingCredits);
+            }
+            setShowLowSoulsDialog(true);
+            const errorMessage: ProjectMessage = {
+              id: generateMessageId(),
+              type: 'assistant',
+              content: 'Your souls count is low. Please upgrade or buy more souls to continue.',
+              timestamp: new Date().toISOString()
+            };
+            setMessages(prev => [...prev, errorMessage]);
+            await addMessageToProjectChat(projectId, activeChatId, errorMessage);
+          } else {
+            // Handle other errors
+            const errorMessage: ProjectMessage = {
+              id: generateMessageId(),
+              type: 'assistant',
+              content: `Error creating pact: ${pactBotResponse?.error || 'Unknown error occurred'}`,
+              timestamp: new Date().toISOString()
+            };
+            setMessages(prev => [...prev, errorMessage]);
+            await addMessageToProjectChat(projectId, activeChatId, errorMessage);
+          }
         } else {
+          // Notify credits update if available
+          if (pactBotResponse.remainingCredits !== undefined) {
+            notifyCreditsUpdate(pactBotResponse.remainingCredits);
+          }
+
           // SUCCESS: Display short response in chat
           const assistantMessage: ProjectMessage = {
             id: generateMessageId(),
             type: 'assistant',
-            content: pactBotResponse.shortResponse,
+            content: pactBotResponse.content.shortResponse,
             timestamp: new Date().toISOString()
           };
           setMessages(prev => [...prev, assistantMessage]);
           await addMessageToProjectChat(projectId, activeChatId, assistantMessage);
           
           // Convert markdown body to Tiptap JSON
-          const tiptapBody = convertMarkdownToTiptapJson(pactBotResponse.pact.body);
+          const tiptapBody = convertMarkdownToTiptapJson(pactBotResponse.content.pact.body);
 
           // Create the pact
           const createResult = await createPact(
             projectId,
             pactType,
-            pactBotResponse.pact.title,
+            pactBotResponse.content.pact.title,
             tiptapBody
           );
           if (createResult.success && createResult.pact) {
@@ -1417,16 +1461,8 @@ const ProjectPage = () => {
 
         {/* Right side - Actions and User avatar */}
         <div className="flex z-20 items-center space-x-3">
-        <button
-            onClick={() => window.open('/connect-mcp', '_blank')}
-            className="flex items-center space-x-2 px-3 py-2 bg-black hover:bg-gray-900 border border-white/69 hover:border-gray-300 rounded-lg transition-all duration-200 group"
-            title="Connect MCP"
-          >
-            <BrainCircuit className="h-4 w-4 text-white group-hover:text-gray-300 transition-colors" />
-            <span className="text-sm text-white group-hover:text-gray-300 transition-colors hidden sm:block">
-              Connect MCP
-            </span>
-          </button>
+        {/* Soul Count */}
+        <SoulCount />
           {/* Feedback button */}
           <button
             onClick={() => setIsFeedbackOpen(true)}
@@ -1627,6 +1663,7 @@ const ProjectPage = () => {
 
             {/* Input Area */}
             <ChatInput
+              maxLength={MAX_CHARACTERS}
               inputMessage={inputMessage}
               textareaHeight={textareaHeight}
               isChatLoading={isChatLoading}
@@ -1846,6 +1883,7 @@ const ProjectPage = () => {
 
             {/* Input Area - Only show for chat tab */}
             <ChatInput
+              maxLength={MAX_CHARACTERS}
               inputMessage={inputMessage}
               textareaHeight={textareaHeight}
               isChatLoading={isChatLoading || isCharacterLimitReached}
@@ -2399,18 +2437,19 @@ const ProjectPage = () => {
         /* Disable text selection during resize */
         ${isResizing ? '*{user-select: none !important;}' : ''}
       `}</style>
-      {/* Max Chats Pricing Dialog */}
-      <PricingDialog 
-        open={showMaxChatsDialog} 
-        onOpenChange={setShowMaxChatsDialog}
-        description={`You've reached the maximum limit of ${MAX_CHATS} chats for this project. Upgrade to Pro to create more chats and unlock advanced features.`}
-      />
 
       {/* Character Limit Pricing Dialog */}
       <PricingDialog 
         open={showCharacterLimitDialog} 
         onOpenChange={setShowCharacterLimitDialog}
         description="You've reached the maximum token limit for this chat. Upgrade to Pro to unlock extended token limits and continue your conversation."
+      />
+
+      {/* Low Souls Pricing Dialog */}
+      <PricingDialog 
+        open={showLowSoulsDialog} 
+        onOpenChange={setShowLowSoulsDialog}
+        description="Your souls count is low. Please upgrade or buy more souls to continue."
       />
 
     </div>

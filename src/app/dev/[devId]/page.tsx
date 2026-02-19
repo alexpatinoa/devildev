@@ -6,12 +6,14 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import 'highlight.js/styles/github-dark.css';
-import { Search, FileText, HelpCircle, Image as ImageIcon, Globe, Paperclip, Mic, BarChart3, SendHorizonal, Maximize, X, Menu, ChevronLeft, MessageCircle, Users, Phone, Info, Plus, Loader2, MessageSquare, Send, BrainCircuit, ChevronDown } from 'lucide-react';
+import {HelpCircle, Image as ImageIcon, SendHorizontal, Maximize, X, Menu, MessageCircle, Users, Phone, Plus, Loader2, MessageSquare, BrainCircuit, ChevronDown } from 'lucide-react';
 import Architecture from '@/components/core/architecture';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { startOrNot, firstBot, chatbot, architectureModificationBot } from '../../../../actions/agentsFlow';
+import SoulCount from '../../../components/core/SoulCount';
+import { chatbot, architectureModificationBot } from '../../../../actions/agentsFlow';
 import { submitFeedback } from '../../../../actions/feedback';
-import { generateArchitectureWithToolCalling, triggerArchitectureGeneration } from '../../../../actions/architecture'; 
+import { notifyCreditsUpdate, refetchCredits } from '@/lib/credits-events';
+import { triggerArchitectureGeneration } from '../../../../actions/architecture'; 
 import { getChat, addMessageToChat, updateChatMessages, createChatWithId, ChatMessage as ChatMessageType, getUserChats } from '../../../../actions/chat';
 import { 
   saveArchitecture, 
@@ -190,8 +192,6 @@ const DevPage = () => {
   const [startX, setStartX] = useState(0);
   const [startLeftWidth, setStartLeftWidth] = useState(30);
   
-  // Sidebar state - no longer needed as it's hover-based
-  const [isSidebarHovered, setIsSidebarHovered] = useState(false);
   
   // New sidebar state for dev page
   const [isDevSidebarHovered, setIsDevSidebarHovered] = useState(false);
@@ -208,8 +208,8 @@ const DevPage = () => {
   const [isHowToOpen, setIsHowToOpen] = useState(false);
 
   // Character limit state
-  const [isCharacterLimitReached, setIsCharacterLimitReached] = useState(false);
   const [showCharacterLimitDialog, setShowCharacterLimitDialog] = useState(false);
+  const [showLowSoulsDialog, setShowLowSoulsDialog] = useState(false);
   
   
   // Coach mark state
@@ -574,11 +574,6 @@ const DevPage = () => {
     }
   }, [isSignedIn, isLoaded]);
 
-  // Monitor character limit
-  useEffect(() => {
-    const totalCharacters = calculateTotalCharacters(messages);
-    setIsCharacterLimitReached(totalCharacters >= MAX_CHARACTERS);
-  }, [messages]);
 
   // Auto-scroll to bottom when messages change, or to docs button when it appears
   useEffect(() => {
@@ -652,6 +647,12 @@ const DevPage = () => {
         if (result.success) {
           // Start polling for the architecture
           pollForArchitecture(generationId);
+        } else if (result.error === 'INSUFFICIENT_CREDITS') {
+          if (result.remainingCredits !== undefined) {
+            notifyCreditsUpdate(result.remainingCredits);
+          }
+          setShowLowSoulsDialog(true);
+          setIsArchitectureLoading(false);
         } else {
           console.error('Failed to trigger architecture generation:', result.error);
           setIsArchitectureLoading(false);
@@ -702,6 +703,12 @@ const DevPage = () => {
           
           setArchitectureGenerated(true);
           setIsArchitectureLoading(false);
+          
+          // Refetch credits after background job completes
+          if (user?.id) {
+            await refetchCredits(user.id);
+          }
+          
           return;
         }
         
@@ -730,8 +737,33 @@ const DevPage = () => {
     setIsLoading(true); 
     
     try {
-      const chatbotResponse = await chatbot(initialMessage, currentMessages);
-      // const isStart = await startOrNot(initialMessage, [], null);
+      const result = await chatbot(initialMessage, currentMessages, user?.id ?? null); 
+      
+      // Handle insufficient credits
+      if (typeof result === 'object' && result.error === 'INSUFFICIENT_CREDITS') {
+        if (result.remainingCredits !== undefined) {
+          notifyCreditsUpdate(result.remainingCredits);
+        }
+        setShowLowSoulsDialog(true);
+        const assistantMessage: ChatMessageType = {
+          id: Date.now().toString(),
+          type: 'assistant',
+          content: 'Your souls count is low. Please upgrade or buy more souls to continue.',
+          timestamp: new Date().toISOString()
+        };
+        const updatedMessages = [...currentMessages, assistantMessage];
+        setMessages(updatedMessages);
+        setIsLoading(false);
+        await updateChatMessages(chatId, updatedMessages);
+        return;
+      }
+      
+      // Notify credits update if available
+      if (typeof result === 'object' && result.remainingCredits !== undefined) {
+        notifyCreditsUpdate(result.remainingCredits);
+      }
+      
+      const chatbotResponse = typeof result === 'string' ? result : result?.textContent ?? '';
       let cleanedIsStart = chatbotResponse;
       
       const parsedClassifier = safeJsonParse(cleanedIsStart);  
@@ -815,7 +847,33 @@ const DevPage = () => {
     if(architectureData){
       setIsArchitectureGeneratedOnce(true);
       try {
-        const chatbotResponse = await architectureModificationBot(currentInput, messages, architectureData);
+        const result = await architectureModificationBot(currentInput, messages, architectureData, user?.id ?? null);
+        
+        // Handle insufficient credits
+        if (typeof result === 'object' && result.error === 'INSUFFICIENT_CREDITS') {
+          if (result.remainingCredits !== undefined) {
+            notifyCreditsUpdate(result.remainingCredits);
+          }
+          setShowLowSoulsDialog(true);
+          const assistantMessage: ChatMessageType = {
+            id: Date.now().toString(),
+            type: 'assistant',
+            content: 'Your souls count is low. Please upgrade or buy more souls to continue.',
+            timestamp: new Date().toISOString()
+          };
+          const updatedMessages = [...updatedMessagesWithUser, assistantMessage];
+          setMessages(updatedMessages);
+          setIsLoading(false);
+          await updateChatMessages(chatId, updatedMessages);
+          return;
+        }
+        
+        // Notify credits update if available
+        if (typeof result === 'object' && result.remainingCredits !== undefined) {
+          notifyCreditsUpdate(result.remainingCredits);
+        }
+        
+        const chatbotResponse = typeof result === 'string' ? result : result.textContent;
         const parsedClassifier = safeJsonParse(chatbotResponse); 
  
         setCurrentStartOrNot(parsedClassifier.is_change);
@@ -862,7 +920,33 @@ const DevPage = () => {
       }
     }else{
       try {
-        const chatbotResponse = await chatbot(currentInput, messages);
+        const result = await chatbot(currentInput, messages, user?.id ?? null);
+        
+        // Handle insufficient credits
+        if (typeof result === 'object' && result.error === 'INSUFFICIENT_CREDITS') {
+          if (result.remainingCredits !== undefined) {
+            notifyCreditsUpdate(result.remainingCredits);
+          }
+          setShowLowSoulsDialog(true);
+          const assistantMessage: ChatMessageType = {
+            id: Date.now().toString(),
+            type: 'assistant',
+            content: 'Your souls count is low. Please upgrade or buy more souls to continue.',
+            timestamp: new Date().toISOString()
+          };
+          const updatedMessages = [...updatedMessagesWithUser, assistantMessage];
+          setMessages(updatedMessages);
+          setIsLoading(false);
+          await updateChatMessages(chatId, updatedMessages);
+          return;
+        }
+        
+        // Notify credits update if available
+        if (typeof result === 'object' && result.remainingCredits !== undefined) {
+          notifyCreditsUpdate(result.remainingCredits);
+        }
+        
+        const chatbotResponse = typeof result === 'string' ? result : result?.textContent ?? '';
         const parsedClassifier = safeJsonParse(chatbotResponse);
 
         setCurrentStartOrNot(parsedClassifier.canStart);
@@ -1267,7 +1351,10 @@ const DevPage = () => {
         {/* Right side - How to, Feedback button and User avatar */}
         <div className="flex items-center space-x-3">
 
-        <button
+           {/* Soul Count */}
+           <SoulCount />
+
+        {/* <button
             onClick={() => window.open('/connect-mcp', '_blank')}
             className="flex items-center space-x-2 px-3 py-2 bg-black hover:bg-gray-900 border border-white hover:border-gray-300 rounded-lg transition-all duration-200 group"
             title="Send Feedback"
@@ -1276,7 +1363,7 @@ const DevPage = () => {
             <span className="text-sm text-white group-hover:text-gray-300 transition-colors hidden sm:block">
               Connect MCP
             </span>
-          </button>
+          </button> */}
 
           {/* Feedback button */}
           <button
@@ -1674,7 +1761,7 @@ const DevPage = () => {
                       className="w-full bg-transparent text-white placeholder-gray-400 px-4 py-3 text-sm md:text-base focus:outline-none resize-none overflow-y-auto min-h-[60px] max-h-[180px]"
                       rows={2}
                       style={{ height: textareaHeight }}
-                      maxLength={5000}
+                      maxLength={MAX_CHARACTERS}
                       disabled={isLoading || isArchitectureLoading}
                     />
                   </div>
@@ -1686,7 +1773,7 @@ const DevPage = () => {
                       className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
                       disabled={!inputMessage.trim() || isLoading || isArchitectureLoading}
                     >
-                      <SendHorizonal className="h-4 w-4" />
+                      <SendHorizontal className="h-4 w-4" />
                     </button>
                   </div>
                 </form>
@@ -2067,7 +2154,7 @@ const DevPage = () => {
                       className="w-full bg-transparent text-white placeholder-gray-400 px-4 py-3 text-sm md:text-base focus:outline-none resize-none overflow-y-auto min-h-[60px] max-h-[180px]"
                       rows={2}
                       style={{ height: textareaHeight }}
-                      maxLength={5000}
+                      maxLength={MAX_CHARACTERS}
                       disabled={isLoading || isArchitectureLoading}
                     />
                   </div>
@@ -2079,7 +2166,7 @@ const DevPage = () => {
                       className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
                       disabled={!inputMessage.trim() || isLoading || isArchitectureLoading}
                     >
-                      <SendHorizonal className="h-4 w-4" />
+                      <SendHorizontal className="h-4 w-4" />
                     </button>
                   </div>
                 </form>
@@ -2493,6 +2580,13 @@ const DevPage = () => {
         open={showCharacterLimitDialog} 
         onOpenChange={setShowCharacterLimitDialog}
         description="You've reached the maximum token limit for this chat. Upgrade to Pro to unlock extended token limits and continue your conversation."
+      />
+
+      {/* Low Souls Pricing Dialog */}
+      <PricingDialog 
+        open={showLowSoulsDialog} 
+        onOpenChange={setShowLowSoulsDialog}
+        description="Your souls count is low. Please upgrade or buy more souls to continue."
       />
     </div>
   );
