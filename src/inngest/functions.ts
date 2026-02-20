@@ -62,7 +62,8 @@ export const generateArchitectureFunction = inngest.createFunction(
 
 export const generateReverseArchitectureFunction = inngest.createFunction(
   {
-    id: "generate-reverse-architecture"
+    id: "generate-reverse-architecture",
+    idempotency: 'event.data.projectId'
   },
   { event: "reverse-architecture/generate" },
   async ({ event, step }) => {
