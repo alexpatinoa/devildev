@@ -421,7 +421,6 @@ const DevPage = () => {
               localStorage.removeItem('newChatId');
               localStorage.removeItem('firstMessage');
               localStorage.removeItem('isNewChat');
-              // router.push('/');
               return;
             }
             
@@ -430,11 +429,6 @@ const DevPage = () => {
             localStorage.removeItem('firstMessage');
             localStorage.removeItem('isNewChat');
             
-            
-            
-            // Process the initial message
-            
-          
         } else {
 
           setIsLoadingChat(true);
