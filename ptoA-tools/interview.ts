@@ -38,11 +38,11 @@ const InterviewInputSchema = z.object({
 
 /** LangChain tool for asking the user clarification/questions (tool-calling). */
 export const interviewTool = new DynamicStructuredTool({
-  name: "ask_user",
+  name: "interview_user",
   description:
     "Use this tool to ask the user for clarification or input on key design decisions. Provide 1-4 structured questions with 2-4 options each. Use when you need more information about the user's query of what exactly he meant or what exactly he wants to build.",
   schema: InterviewInputSchema,
   func: async (input): Promise<string> => {
-    return JSON.stringify(input.questions, null, 2);
+    return JSON.stringify(input);
   },
 });
