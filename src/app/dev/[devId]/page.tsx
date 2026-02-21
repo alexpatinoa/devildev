@@ -2,21 +2,18 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
-import 'highlight.js/styles/github-dark.css';
-import {HelpCircle, Image as ImageIcon, SendHorizontal, Maximize, X, Menu, MessageCircle, Users, Phone, Plus, Loader2, MessageSquare, BrainCircuit, ChevronDown } from 'lucide-react';
+import {HelpCircle, Maximize, X, Menu, MessageCircle, Users, Phone, Plus, Loader2, MessageSquare, BrainCircuit, ChevronDown } from 'lucide-react';
 import Architecture from '@/components/core/architecture';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import SoulCount from '../../../components/core/SoulCount';
+import { ChatMessageList, ChatInput } from '@/components/Dev';
 import { chatbot, architectureModificationBot } from '../../../../actions/agentsFlow';
+import { TerminatingTools, GeneralResponsePayload, InterviewPayload } from '../../../../types/pToA/tools';
 import { submitFeedback } from '../../../../actions/feedback';
 import { notifyCreditsUpdate, refetchCredits } from '@/lib/credits-events';
 import { triggerArchitectureGeneration } from '../../../../actions/architecture'; 
 import { getChat, addMessageToChat, updateChatMessages, createChatWithId, ChatMessage as ChatMessageType, getUserChats } from '../../../../actions/chat';
-import { 
-  saveArchitecture, 
+import {
   getArchitecture, 
   updateComponentPositionsDebounced,
   checkArchitectureById,
@@ -26,11 +23,9 @@ import {
 import {
   saveContextualDocs,
   getContextualDocs,
-  batchUpdateDocs,
   ContextualDocsData
 } from '../../../../actions/contextualDocsPersistence';
 import FileExplorer from '@/components/core/ContextDocs';
-import Noise from '@/components/Noise/Noise';
 import { CoachMark } from '@/components/CoachMarks';
 import { useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
@@ -141,6 +136,24 @@ const safeJsonParse = (jsonString: string | any): any => {
     throw error;
   }
 };
+
+/** Parse chatbot result by terminatingTool; response is stringified JSON from tools. */
+function parseChatbotResult(
+  response: string | undefined,
+  terminatingTool: TerminatingTools | string | undefined
+): { kind: 'general_response'; payload: GeneralResponsePayload } | { kind: 'interview_user'; payload: InterviewPayload } | { kind: 'plain'; text: string } | null {
+  if (response == null || response === '') return null;
+  const tool = terminatingTool?.toLowerCase?.() ?? terminatingTool;
+  if (tool === TerminatingTools.GENERAL_RESPONSE || tool === 'general_response') {
+    const payload = JSON.parse(response) as GeneralResponsePayload;
+    return { kind: 'general_response', payload };
+  }
+  if (tool === TerminatingTools.INTERVIEW_USER || tool === 'interview_user') {
+    const payload = JSON.parse(response) as InterviewPayload;
+    return { kind: 'interview_user', payload };
+  }
+  return { kind: 'plain', text: response };
+}
 
 const DevPage = () => {
   const params = useParams();
@@ -756,52 +769,38 @@ const DevPage = () => {
       if (typeof result === 'object' && result.remainingCredits !== undefined) {
         notifyCreditsUpdate(result.remainingCredits);
       }
-      
-      const chatbotResponse = typeof result === 'string' ? result : result?.textContent ?? '';
-      let cleanedIsStart = chatbotResponse;
-      
-      const parsedClassifier = safeJsonParse(cleanedIsStart);  
 
+      const response = typeof result === 'object' ? result?.response : undefined;
+      const terminatingTool = typeof result === 'object' ? result?.terminatingTool : undefined;
+      const parsed = parseChatbotResult(response, terminatingTool);
 
-      setCurrentStartOrNot(parsedClassifier.can_start); 
-
-
-      if(!parsedClassifier.can_start && parsedClassifier.need_clarification){
-        const assistantMessage: ChatMessageType = {
-          id: Date.now().toString(),
-          type: 'assistant',
-          content: parsedClassifier.question,
-          timestamp: new Date().toISOString()
-        };
-        const updatedMessages = [...currentMessages, assistantMessage];
-        setMessages(updatedMessages); 
+      if (parsed === null) {
         setIsLoading(false);
-        await updateChatMessages(chatId, updatedMessages);
-      }else if(parsedClassifier.can_start && !parsedClassifier.need_clarification){
-        const assistantMessage: ChatMessageType = {
-          id: Date.now().toString(),
-          type: 'assistant',
-          content: parsedClassifier.verification,
-          timestamp: new Date().toISOString()
-        };
-        const updatedMessages = [...currentMessages, assistantMessage];
-        setMessages(updatedMessages); 
-        setIsLoading(false);
-        await genArchitecture(initialMessage, currentMessages);
-        await updateChatMessages(chatId, updatedMessages);
-      }else{
-        const assistantMessage: ChatMessageType = {
-          id: Date.now().toString(),
-          type: 'assistant',
-          content: parsedClassifier.reason,
-          timestamp: new Date().toISOString()
-        };
-        const updatedMessages = [...currentMessages, assistantMessage];
-        setMessages(updatedMessages); 
-        setIsLoading(false);
-        await updateChatMessages(chatId, updatedMessages);
+        return;
       }
 
+      let content: string;
+      if (parsed.kind === 'general_response') {
+        content = parsed.payload.response;
+      } else if (parsed.kind === 'interview_user') {
+        // Placeholder until full interview UI; show first question description or short message
+        content = parsed.payload.questions?.length
+          ? parsed.payload.questions[0].description ?? 'Questions received.'
+          : 'Questions received.';
+      } else {
+        content = parsed.text;
+      }
+
+      const assistantMessage: ChatMessageType = {
+        id: Date.now().toString(),
+        type: 'assistant',
+        content,
+        timestamp: new Date().toISOString()
+      };
+      const updatedMessages = [...currentMessages, assistantMessage];
+      setMessages(updatedMessages);
+      setIsLoading(false);
+      await updateChatMessages(chatId, updatedMessages);
     } catch (error) {
       console.error("Error processing initial message:", error);
     } finally {
@@ -939,48 +938,38 @@ const DevPage = () => {
         if (typeof result === 'object' && result.remainingCredits !== undefined) {
           notifyCreditsUpdate(result.remainingCredits);
         }
-        
-        const chatbotResponse = typeof result === 'string' ? result : result?.textContent ?? '';
-        const parsedClassifier = safeJsonParse(chatbotResponse);
 
-        setCurrentStartOrNot(parsedClassifier.canStart);
+        const response = typeof result === 'object' ? result?.response : undefined;
+        const terminatingTool = typeof result === 'object' ? result?.terminatingTool : undefined;
+        const parsed = parseChatbotResult(response, terminatingTool);
 
-        if(!parsedClassifier.can_start && parsedClassifier.need_clarification){
-          const formattedQuestion = formatAssistantContent(parsedClassifier.question);
-          const assistantMessage: ChatMessageType = {
-            id: Date.now().toString(),
-            type: 'assistant',
-            content: formattedQuestion,
-            timestamp: new Date().toISOString()
-          };
-          const updatedMessages = [...updatedMessagesWithUser, assistantMessage];
-          setMessages(updatedMessages); 
-          setIsLoading(false); 
-          await updateChatMessages(chatId, updatedMessages);
-        }else if(parsedClassifier.can_start && !parsedClassifier.need_clarification){
-          const assistantMessage: ChatMessageType = { 
-            id: Date.now().toString(),
-            type: 'assistant',
-            content: parsedClassifier.verification,
-            timestamp: new Date().toISOString()
-          };
-          const updatedMessages = [...updatedMessagesWithUser, assistantMessage];
-          setMessages(updatedMessages); 
+        if (parsed === null) {
           setIsLoading(false);
-          await genArchitecture(currentInput, messages);
-          await updateChatMessages(chatId, updatedMessages);
-        }else{
-          const assistantMessage: ChatMessageType = {
-            id: Date.now().toString(),
-            type: 'assistant',
-            content: parsedClassifier.reason,
-            timestamp: new Date().toISOString()
-          };
-          const updatedMessages = [...updatedMessagesWithUser, assistantMessage];
-          setMessages(updatedMessages); 
-          setIsLoading(false); 
-          await updateChatMessages(chatId, updatedMessages);
+          return;
         }
+
+        let content: string;
+        if (parsed.kind === 'general_response') {
+          content = parsed.payload.response;
+        } else if (parsed.kind === 'interview_user') {
+          content = parsed.payload.questions?.length
+            ? parsed.payload.questions[0].description ?? 'Questions received.'
+            : 'Questions received.';
+        } else {
+          content = parsed.text;
+        }
+
+        const formattedContent = formatAssistantContent(content);
+        const assistantMessage: ChatMessageType = {
+          id: Date.now().toString(),
+          type: 'assistant',
+          content: formattedContent,
+          timestamp: new Date().toISOString()
+        };
+        const updatedMessages = [...updatedMessagesWithUser, assistantMessage];
+        setMessages(updatedMessages);
+        setIsLoading(false);
+        await updateChatMessages(chatId, updatedMessages);
       } catch (error) {
         console.error('Error calling chatbot:', error);
         
@@ -1539,239 +1528,34 @@ const DevPage = () => {
                   </button>
                 </div>
               </div>
-              
-              {/* Chat Messages with separate scroll and custom scrollbar */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-600 hover:scrollbar-thumb-gray-500">
-                {messages.map((message) => (
-                  <div key={message.id} className={`flex ${message.type === 'user' ? 'justify-start' : 'justify-start'}`}>
-                    {message.type === 'assistant' && (
-                      <div className="mr-3 flex-shrink-0">
-                        <Image
-                          src="/favicon.jpg"
-                          alt="DevilDev AI assistant"
-                          width={32}
-                          height={32}
-                          className="rounded-full"
-                        />
-                      </div>
-                    )}
-                    {message.type === 'user' && (
-                      <div className="mr-1 flex-shrink-0">
-                        <Avatar className="size-8">
-                          <AvatarImage src="https://github.com/shadcn.png" alt="User avatar" />
-                          <AvatarFallback>U</AvatarFallback>
-                        </Avatar>
-                      </div>
-                    )}
-                    <div className={`max-w-[80%] rounded-2xl px-2 py-1 ${
-                      message.type === 'user' 
-                        ? ' text-white' 
-                        : ' text-white'
-                    }`}>
-                      {message.type === 'assistant' ? (
-                        <div className="prose prose-invert prose-sm max-w-none">
-                          <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            rehypePlugins={[rehypeHighlight]}
-                            components={{
-                              h1: ({ children }) => <h1 className="text-lg font-bold mb-2 text-red-400">{children}</h1>,
-                              h2: ({ children }) => <h2 className="text-base font-semibold mb-2 text-red-300">{children}</h2>,
-                              h3: ({ children }) => <h3 className="text-sm font-medium mb-1 text-red-200">{children}</h3>,
-                              p: ({ children }) => <p className="mb-2 text-gray-200">{children}</p>,
-                              ul: ({ children }) => <ul className="list-disc ml-4 mb-2 text-gray-200">{children}</ul>,
-                              ol: ({ children }) => <ol className="list-decimal ml-4 mb-2 text-gray-200">{children}</ol>,
-                              li: ({ children }) => <li className="mb-1">{children}</li>,
-                              code: ({ children, className, ...props }: any) => {
-                                const match = /language-(\w+)/.exec(className || '');
-                                const inline = props.inline;
-                                return !inline ? (
-                                  <pre className="bg-gray-900 rounded-lg p-3 mb-2 overflow-x-auto">
-                                    <code className={className}>{children}</code>
-                                  </pre>
-                                ) : (
-                                  <code className="bg-gray-700 px-1 py-0.5 rounded text-sm">{children}</code>
-                                );
-                              },
-                              blockquote: ({ children }) => <blockquote className="border-l-4 border-red-500 pl-4 italic text-gray-300">{children}</blockquote>,
-                              strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
-                            }}
-                          >
-                            {message.content}
-                          </ReactMarkdown>
-                        </div>
-                      ) : (
-                        <p className="text-sm md:text-base whitespace-pre-wrap">{message.content}</p>
-                      )}
-                    </div>
-                  </div>
-                ))} 
-                
-                {/* Loading indicator */}
-                {isLoading && (
-                  <div className="flex justify-start items-center space-x-3 animate-pulse">
-                    <Image
-                      src="/favicon.jpg"
-                      alt="DevilDev AI assistant"
-                      width={32}
-                      height={32}
-                      className="w-8 h-8 rounded-full "
-                    />
-                    <div className="text-white/69 text-sm flex items-center">
-                      <span>is thinking</span>
-                      <span className="">
-                        <span 
-                          style={{
-                            animation: 'typing 2s infinite',
-                            animationName: 'typing'
-                          }}
-                        >.</span>
-                        <span 
-                          style={{
-                            animation: 'typing 2s infinite 0.3s',
-                            animationName: 'typing'
-                          }}
-                        >.</span>
-                        <span 
-                          style={{
-                            animation: 'typing 2s infinite 0.6s',
-                            animationName: 'typing'
-                          }}
-                        >.</span>
-                      </span>
-
-                    </div>
-                  </div>
-                )}
-                {isGeneratingDocs && (
-                  <div className="flex justify-start items-center space-x-3 animate-pulse">
-                  <Image
-                    src="/favicon.jpg"
-                    alt="DevilDev AI assistant"
-                    width={32}
-                    height={32}
-                    className="w-8 h-8 rounded-full "
-                  />
-                  <div className="text-white/69 text-sm flex items-center">
-                    <span>generating docs </span>
-                    <span className="">
-                      <span 
-                        style={{
-                          animation: 'typing 2s infinite',
-                          animationName: 'typing'
-                        }}
-                      >.</span>
-                      <span 
-                        style={{
-                          animation: 'typing 2s infinite 0.3s',
-                          animationName: 'typing'
-                        }}
-                      >.</span>
-                      <span 
-                        style={{
-                          animation: 'typing 2s infinite 0.6s',
-                          animationName: 'typing'
-                        }}
-                      >.</span>
-                    </span>
-
-                  </div>
-                </div>
-                )}
-                {isArchitectureLoading && (
-                    <div className="flex justify-start items-center space-x-3 animate-pulse">
-                    <Image
-                      src="/favicon.jpg"
-                      alt="DevilDev AI assistant"
-                      width={32}
-                      height={32}
-                      className="w-8 h-8 rounded-full "
-                    />
-                    <div className="text-white/69 text-sm flex items-center">
-                      <span>{architectureData ? "updating" : "generating"} architecture</span>
-                      <span className="">
-                        <span 
-                          style={{
-                            animation: 'typing 2s infinite',
-                            animationName: 'typing'
-                          }}
-                        >.</span>
-                        <span 
-                          style={{
-                            animation: 'typing 2s infinite 0.3s',
-                            animationName: 'typing'
-                          }}
-                        >.</span>
-                        <span 
-                          style={{
-                            animation: 'typing 2s infinite 0.6s',
-                            animationName: 'typing'
-                          }}
-                        >.</span>
-                      </span>
-
-                    </div>
-                  </div>
-                )}
-                { !isLoading && !isArchitectureLoading && !isGeneratingDocs && architectureData && (
-                   <div className={`flex h-12 ml-10 relative ${!docsGenerated && !isMobile && "z-[115]"} `}>
-                   <button 
-                     ref={docsButtonRef}
-                     onClick={handleGenerateDocs} 
-                     className={`px-6 py-2 border rounded-lg font-bold cursor-pointer transition-colors duration-200 relative ${!docsGenerated && !isMobile && "z-[115]"} ${
-                       isStreamingDocs 
-                         ? "bg-yellow-600 border-yellow-600 text-white cursor-not-allowed" 
-                         : docsGenerated
-                           ? "bg-green-600 border-green-600 text-white cursor-not-allowed"
-                           : "hover:bg-transparent border-white hover:text-white bg-white text-black"
-                     }`}
-                     disabled={isStreamingDocs || docsGenerated}
-                   >
-                     {docsGenerated ? "Docs Generated ✓" : "Generate Docs→"}
-                   </button>
-                 </div> 
-                )}
-                 
-                
-                {/* Auto-scroll target */}
-                <div ref={messagesEndRef} />
-              </div>
+              {/* Desktop Chat Messages */}
+              <ChatMessageList
+                messages={messages}
+                isLoading={isLoading}
+                isGeneratingDocs={isGeneratingDocs}
+                isArchitectureLoading={isArchitectureLoading}
+                architectureData={architectureData}
+                docsGenerated={docsGenerated}
+                isStreamingDocs={isStreamingDocs}
+                isMobile={isMobile}
+                userInitial={user?.firstName?.charAt(0) || user?.emailAddresses?.[0]?.emailAddress.charAt(0) || "U"}
+                onGenerateDocs={handleGenerateDocs}
+                docsButtonRef={docsButtonRef}
+                messagesEndRef={messagesEndRef}
+              />
 
             
 
               {/* Input Area */}
-              <div className="p-4 flex-shrink-0">
-                <form onSubmit={handleSubmit} className="relative">
-                  <div className="bg-black border-t border-x border-gray-500 backdrop-blur-sm overflow-hidden rounded-t-2xl">
-                    <textarea
-                      placeholder="Continue the conversation..."
-                      value={inputMessage}
-                      onChange={handleTextareaChange}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          handleSubmit(e);
-                        }
-                      }}
-                      className="w-full bg-transparent text-white placeholder-gray-400 px-4 py-3 text-sm md:text-base focus:outline-none resize-none overflow-y-auto min-h-[60px] max-h-[180px]"
-                      rows={2}
-                      style={{ height: textareaHeight }}
-                      maxLength={MAX_CHARACTERS}
-                      disabled={isLoading || isArchitectureLoading}
-                    />
-                  </div>
-                  
-                  {/* Button section */}
-                  <div className="bg-black border-l border-r border-b border-gray-500 backdrop-blur-sm rounded-b-2xl px-3 py-2 flex justify-end">
-                    <button 
-                      type="submit" 
-                      className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
-                      disabled={!inputMessage.trim() || isLoading || isArchitectureLoading}
-                    >
-                      <SendHorizontal className="h-4 w-4" />
-                    </button>
-                  </div>
-                </form>
-              </div>
+              <ChatInput
+                inputMessage={inputMessage}
+                textareaHeight={textareaHeight}
+                isLoading={isLoading}
+                isArchitectureLoading={isArchitectureLoading}
+                maxLength={MAX_CHARACTERS}
+                onInputChange={handleTextareaChange}
+                onSubmit={handleSubmit}
+              />
             </div>
 
             {/* Resize Handle */}
@@ -1933,238 +1717,34 @@ const DevPage = () => {
                 </div>
               </div>
               
-              {/* Chat Messages with separate scroll and custom scrollbar */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-600 hover:scrollbar-thumb-gray-500">
-                {messages.map((message) => (
-                  <div key={message.id} className={`flex ${message.type === 'user' ? 'justify-start' : 'justify-start'}`}>
-                    {message.type === 'assistant' && (
-                      <div className="mr-3 flex-shrink-0">
-                        <Image
-                          src="/favicon.jpg"
-                          alt="DevilDev AI assistant"
-                          width={32}
-                          height={32}
-                          className="rounded-full"
-                        />
-                      </div>
-                    )}
-                    {message.type === 'user' && (
-                      <div className="mr-1 flex-shrink-0">
-                        <Avatar className="size-8">
-                          <AvatarImage src="https://github.com/shadcn.png" alt="User avatar" />
-                          <AvatarFallback>U</AvatarFallback>
-                        </Avatar>
-                      </div>
-                    )}
-                    <div className={`max-w-[80%] rounded-2xl px-2 py-1 ${
-                      message.type === 'user' 
-                        ? ' text-white' 
-                        : ' text-white'
-                    }`}>
-                      {message.type === 'assistant' ? (
-                        <div className="prose prose-invert prose-sm max-w-none">
-                          <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            rehypePlugins={[rehypeHighlight]}
-                            components={{
-                              h1: ({ children }) => <h1 className="text-lg font-bold mb-2 text-red-400">{children}</h1>,
-                              h2: ({ children }) => <h2 className="text-base font-semibold mb-2 text-red-300">{children}</h2>,
-                              h3: ({ children }) => <h3 className="text-sm font-medium mb-1 text-red-200">{children}</h3>,
-                              p: ({ children }) => <p className="mb-2 text-gray-200">{children}</p>,
-                              ul: ({ children }) => <ul className="list-disc ml-4 mb-2 text-gray-200">{children}</ul>,
-                              ol: ({ children }) => <ol className="list-decimal ml-4 mb-2 text-gray-200">{children}</ol>,
-                              li: ({ children }) => <li className="mb-1">{children}</li>,
-                              code: ({ children, className, ...props }: any) => {
-                                const match = /language-(\w+)/.exec(className || '');
-                                const inline = props.inline;
-                                return !inline ? (
-                                  <pre className="bg-gray-900 rounded-lg p-3 mb-2 overflow-x-auto">
-                                    <code className={className}>{children}</code>
-                                  </pre>
-                                ) : (
-                                  <code className="bg-gray-700 px-1 py-0.5 rounded text-sm">{children}</code>
-                                );
-                              },
-                              blockquote: ({ children }) => <blockquote className="border-l-4 border-red-500 pl-4 italic text-gray-300">{children}</blockquote>,
-                              strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
-                            }}
-                          >
-                            {message.content}
-                          </ReactMarkdown>
-                        </div>
-                      ) : (
-                        <p className="text-sm md:text-base whitespace-pre-wrap">{message.content}</p>
-                      )}
-                    </div>
-                  </div>
-                ))} 
-                
-                {/* Loading indicator */}
-                {isLoading && (
-                  <div className="flex justify-start items-center space-x-3 animate-pulse">
-                    <Image
-                      src="/favicon.jpg"
-                      alt="DevilDev AI assistant"
-                      width={32}
-                      height={32}
-                      className="w-8 h-8 rounded-full "
-                    />
-                    <div className="text-white/69 text-sm flex items-center">
-                      <span>is thinking</span>
-                      <span className="">
-                        <span 
-                          style={{
-                            animation: 'typing 2s infinite',
-                            animationName: 'typing'
-                          }}
-                        >.</span>
-                        <span 
-                          style={{
-                            animation: 'typing 2s infinite 0.3s',
-                            animationName: 'typing'
-                          }}
-                        >.</span>
-                        <span 
-                          style={{
-                            animation: 'typing 2s infinite 0.6s',
-                            animationName: 'typing'
-                          }}
-                        >.</span>
-                      </span>
-
-                    </div>
-                  </div>
-                )}
-                {isGeneratingDocs && (
-                  <div className="flex justify-start items-center space-x-3 animate-pulse">
-                  <Image
-                    src="/favicon.jpg"
-                    alt="DevilDev AI assistant"
-                    width={32}
-                    height={32}
-                    className="w-8 h-8 rounded-full "
-                  />
-                  <div className="text-white/69 text-sm flex items-center">
-                    <span>generating docs </span>
-                    <span className="">
-                      <span 
-                        style={{
-                          animation: 'typing 2s infinite',
-                          animationName: 'typing'
-                        }}
-                      >.</span>
-                      <span 
-                        style={{
-                          animation: 'typing 2s infinite 0.3s',
-                          animationName: 'typing'
-                        }}
-                      >.</span>
-                      <span 
-                        style={{
-                          animation: 'typing 2s infinite 0.6s',
-                          animationName: 'typing'
-                        }}
-                      >.</span>
-                    </span>
-
-                  </div>
-                </div>
-                )}
-                {isArchitectureLoading && (
-                    <div className="flex justify-start items-center space-x-3 animate-pulse">
-                    <Image
-                      src="/favicon.jpg"
-                      alt="DevilDev AI assistant"
-                      width={32}
-                      height={32}
-                      className="w-8 h-8 rounded-full "
-                    />
-                    <div className="text-white/69 text-sm flex items-center">
-                      <span>{architectureData ? "updating" : "generating"} architecture</span>
-                      <span className="">
-                        <span 
-                          style={{
-                            animation: 'typing 2s infinite',
-                            animationName: 'typing'
-                          }}
-                        >.</span>
-                        <span 
-                          style={{
-                            animation: 'typing 2s infinite 0.3s',
-                            animationName: 'typing'
-                          }}
-                        >.</span>
-                        <span 
-                          style={{
-                            animation: 'typing 2s infinite 0.6s',
-                            animationName: 'typing'
-                          }}
-                        >.</span>
-                      </span>
-
-                    </div>
-                  </div>
-                )}
-                { !isLoading && !isArchitectureLoading && !isGeneratingDocs && architectureData && (
-                   <div className={`flex h-12 ml-10 relative ${!docsGenerated && !isMobile && "z-[115]"} `}>
-                   <button 
-                     ref={docsButtonRef}
-                     onClick={handleGenerateDocs} 
-                     className={`px-6 py-2 border rounded-lg font-bold cursor-pointer transition-colors duration-200 relative ${!docsGenerated && !isMobile && "z-[115]"} ${
-                       isStreamingDocs 
-                         ? "bg-yellow-600 border-yellow-600 text-white cursor-not-allowed" 
-                         : docsGenerated
-                           ? "bg-green-600 border-green-600 text-white cursor-not-allowed"
-                           : "hover:bg-transparent border-white hover:text-white bg-white text-black"
-                     }`}
-                     disabled={isStreamingDocs || docsGenerated}
-                   >
-                     {docsGenerated ? "Docs Generated ✓" : "Generate Docs→"}
-                   </button>
-                 </div> 
-                )}
-                 
-                
-                {/* Auto-scroll target */}
-                <div ref={messagesEndRef} />
-              </div>
+              {/* Chat Messages with refactored component */}
+              <ChatMessageList
+                messages={messages}
+                isLoading={isLoading}
+                isGeneratingDocs={isGeneratingDocs}
+                isArchitectureLoading={isArchitectureLoading}
+                architectureData={architectureData}
+                docsGenerated={docsGenerated}
+                isStreamingDocs={isStreamingDocs}
+                isMobile={isMobile}
+                userInitial={user?.firstName?.charAt(0) || user?.emailAddresses?.[0]?.emailAddress.charAt(0) || "U"}
+                onGenerateDocs={handleGenerateDocs}
+                docsButtonRef={docsButtonRef}
+                messagesEndRef={messagesEndRef}
+              />
 
             
 
               {/* Input Area */}
-              <div className="p-4 flex-shrink-0">
-                <form onSubmit={handleSubmit} className="relative">
-                  <div className="bg-black border-t border-x border-gray-500 backdrop-blur-sm overflow-hidden rounded-t-2xl">
-                    <textarea
-                      placeholder="Continue the conversation..."
-                      value={inputMessage}
-                      onChange={handleTextareaChange}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          handleSubmit(e);
-                        }
-                      }}
-                      className="w-full bg-transparent text-white placeholder-gray-400 px-4 py-3 text-sm md:text-base focus:outline-none resize-none overflow-y-auto min-h-[60px] max-h-[180px]"
-                      rows={2}
-                      style={{ height: textareaHeight }}
-                      maxLength={MAX_CHARACTERS}
-                      disabled={isLoading || isArchitectureLoading}
-                    />
-                  </div>
-                  
-                  {/* Button section */}
-                  <div className="bg-black border-l border-r border-b border-gray-500 backdrop-blur-sm rounded-b-2xl px-3 py-2 flex justify-end">
-                    <button 
-                      type="submit" 
-                      className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
-                      disabled={!inputMessage.trim() || isLoading || isArchitectureLoading}
-                    >
-                      <SendHorizontal className="h-4 w-4" />
-                    </button>
-                  </div>
-                </form>
-              </div>
+              <ChatInput
+                inputMessage={inputMessage}
+                textareaHeight={textareaHeight}
+                isLoading={isLoading}
+                isArchitectureLoading={isArchitectureLoading}
+                maxLength={MAX_CHARACTERS}
+                onInputChange={handleTextareaChange}
+                onSubmit={handleSubmit}
+              />
             </div>
           </>
         )}
