@@ -3,13 +3,16 @@
 import { db } from "@/lib/db";
 import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
+import type { InterviewPayload, InterviewAnswer } from "../types/pToA/tools";
 
 export interface ChatMessage {
   id: string;
   type: 'user' | 'assistant';
   content: string;
-  timestamp: string; // Changed to string for JSON compatibility
+  timestamp: string;
   isStreaming?: boolean;
+  interviewPayload?: InterviewPayload;
+  interviewAnswers?: InterviewAnswer[];
 }
 
 // Create a new chat with a specific ID (for localStorage flow)

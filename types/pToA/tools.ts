@@ -22,3 +22,9 @@ export interface InterviewQuestion {
 export interface InterviewPayload {
     questions: InterviewQuestion[];
 }
+
+/** One answered question from the user (saved in message JSON) */
+export interface InterviewAnswer {
+    questionIndex: number;
+    selected: string[];
+}
