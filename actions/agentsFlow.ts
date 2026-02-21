@@ -1,7 +1,7 @@
 "use server";
 import { ChatOpenAI } from "@langchain/openai";
 import { ChatPromptTemplate, MessagesPlaceholder, PromptTemplate } from "@langchain/core/prompts";
-import { architectureModificationPrompt, DEVILDEV_AGENT_PROMPT } from "../prompts/Chatbot";
+import { architectureModificationPrompt, BASE_DEVILDEV_AGENT_PROMPT, DevilDevAgentAfterInterviewRole, DevilDevAgentBeforeInterviewRole } from "../prompts/Chatbot";
 import { deductCredits, getCredits } from "./credits";
 import { minSoulsToSendMessage } from "../Limits";
 import { extractTextContent } from "@/lib/ai/extractTextContent";
@@ -10,6 +10,7 @@ import { generalResTool } from "../ptoA-tools/general_res";
 import { AgentExecutor, createToolCallingAgent } from "langchain/agents";
 import { TokenUsageCallbackHandler } from "../common/TokenUsageHandler";
 import { TERMINATING_TOOLS, TerminatingTools } from "../types/pToA/tools";
+import { tier1Tool } from "../ptoA-tools/tier-1";
 
 // Return type for agent flow functions
 export type AgentFlowResult = {
@@ -26,7 +27,7 @@ const llm = new ChatOpenAI({
 
 
 
-export async function chatbot(userInput: string, conversationHistory: any[] = [], userId: string | null = null) {
+export async function chatbot(userInput: string, conversationHistory: any[] = [], userId: string | null = null, isInterviewed: boolean = false) {
     // Check credits before running the agent
     if (userId) {
         const creditsResult = await getCredits(userId);
@@ -40,10 +41,23 @@ export async function chatbot(userInput: string, conversationHistory: any[] = []
         `${msg.type === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
     ).join('\n');
 
-    const tools = [interviewTool, generalResTool];
+    const lastMessage = conversationHistory.length > 0
+        ? `${conversationHistory[conversationHistory.length - 1].type === 'user' ? 'User' : 'Assistant'}: ${conversationHistory[conversationHistory.length - 1].content}`
+        : "";
+
+    const tools = [interviewTool, generalResTool, tier1Tool, tier1Tool];
+
+    let systemRole = "";
+
+    if(isInterviewed) {
+        systemRole = DevilDevAgentAfterInterviewRole.replace("{interviewAnswers}", lastMessage || "(none)");
+    } else {
+        systemRole = DevilDevAgentBeforeInterviewRole;
+    }
 
     const prompt = ChatPromptTemplate.fromMessages([
-      ["system", DEVILDEV_AGENT_PROMPT],
+      ["system", systemRole + "\n" + BASE_DEVILDEV_AGENT_PROMPT],
+      ["user", userInput],
       new MessagesPlaceholder("agent_scratchpad"),
     ]);
     const agent = await createToolCallingAgent({

@@ -8,7 +8,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import SoulCount from '../../../components/core/SoulCount';
 import { ChatMessageList, ChatInput } from '@/components/Dev';
 import { chatbot, architectureModificationBot } from '../../../../actions/agentsFlow';
-import { TerminatingTools, GeneralResponsePayload, InterviewPayload } from '../../../../types/pToA/tools';
+import { TerminatingTools, GeneralResponsePayload, InterviewPayload, Tier1Payload, Tier2Payload, type InterviewAnswer, type InterviewQuestion } from '../../../../types/pToA/tools';
 import { submitFeedback } from '../../../../actions/feedback';
 import { notifyCreditsUpdate, refetchCredits } from '@/lib/credits-events';
 import { triggerArchitectureGeneration } from '../../../../actions/architecture'; 
@@ -141,7 +141,7 @@ const safeJsonParse = (jsonString: string | any): any => {
 function parseChatbotResult(
   response: string | undefined,
   terminatingTool: TerminatingTools | string | undefined
-): { kind: 'general_response'; payload: GeneralResponsePayload } | { kind: 'interview_user'; payload: InterviewPayload } | { kind: 'plain'; text: string } | null {
+): { kind: 'general_response'; payload: GeneralResponsePayload } | { kind: 'interview_user'; payload: InterviewPayload } | { kind: 'tier_1'; payload: Tier1Payload } | { kind: 'tier_2'; payload: Tier2Payload } | { kind: 'plain'; text: string } | null {
   if (response == null || response === '') return null;
   const tool = terminatingTool?.toLowerCase?.() ?? terminatingTool;
   if (tool === TerminatingTools.GENERAL_RESPONSE || tool === 'general_response') {
@@ -152,7 +152,26 @@ function parseChatbotResult(
     const payload = JSON.parse(response) as InterviewPayload;
     return { kind: 'interview_user', payload };
   }
+  if (tool === TerminatingTools.TIER_1 || tool === 'tier_1') {
+    const payload = JSON.parse(response) as Tier1Payload;
+    return { kind: 'tier_1', payload };
+  }
+  if (tool === TerminatingTools.TIER_2 || tool === 'tier_2') {
+    const payload = JSON.parse(response) as Tier2Payload;
+    return { kind: 'tier_2', payload };
+  }
   return { kind: 'plain', text: response };
+}
+
+/** Format interview answers as a single string for the backend when isInterviewed is true. */
+function formatInterviewAnswersForApi(questions: InterviewQuestion[], answers: InterviewAnswer[]): string {
+  return answers
+    .map((a) => {
+      const q = questions[a.questionIndex];
+      const title = q?.title ?? `Question ${a.questionIndex + 1}`;
+      return `${title}: ${a.selected.join(', ')}`;
+    })
+    .join('\n');
 }
 
 const DevPage = () => {
@@ -313,25 +332,6 @@ const DevPage = () => {
     setStartLeftWidth(leftPanelWidth);
   };
 
-  // Beautify assistant message content: convert inline bullets to proper Markdown lists
-  const formatAssistantContent = (input: string): string => {
-    if (!input) return '';
-    let text = input.trim();
-
-    // Normalize common bullet characters into Markdown list items
-    text = text
-      .replace(/[\t ]*•[\t ]*/g, '\n- ')
-      .replace(/[\t ]*–[\t ]*/g, '\n- ')
-      .replace(/[\t ]*—[\t ]*/g, '\n- ');
-
-    // Ensure a blank line before the list if preceded by a colon
-    text = text.replace(/:\n- /g, ':\n\n- ');
-
-    // // Collapse excessive newlines
-    text = text.replace(/\n{3,}/g, '\n\n');
-
-    return text;
-  };
 
   // Handle component position changes with persistence
   const handlePositionChange = async (positions: Record<string, ComponentPosition>) => {
@@ -738,15 +738,16 @@ const DevPage = () => {
     poll();
   };
 
-  // Process the initial message when loading a chat
-  const processInitialMessage = async (initialMessage: string, currentMessages: ChatMessageType[]) => {
-
-    setIsLoading(true); 
-    
+  // Shared logic: call chatbot, handle credits/parse/assistant message, update state and DB.
+  const processChatbotResponse = async (
+    userMessage: string,
+    messagesForApi: ChatMessageType[],
+    messagesWithUserMessage: ChatMessageType[],
+    options?: { onError?: (messagesWithUser: ChatMessageType[]) => Promise<void>; isInterviewed?: boolean }
+  ): Promise<void> => {
     try {
-      const result = await chatbot(initialMessage, currentMessages, user?.id ?? null); 
-      
-      // Handle insufficient credits
+      const result = await chatbot(userMessage, messagesForApi, user?.id ?? null, options?.isInterviewed ?? false);
+
       if (typeof result === 'object' && result.error === 'INSUFFICIENT_CREDITS') {
         if (result.remainingCredits !== undefined) {
           notifyCreditsUpdate(result.remainingCredits);
@@ -758,14 +759,12 @@ const DevPage = () => {
           content: 'Your souls count is low. Please upgrade or buy more souls to continue.',
           timestamp: new Date().toISOString()
         };
-        const updatedMessages = [...currentMessages, assistantMessage];
+        const updatedMessages = [...messagesWithUserMessage, assistantMessage];
         setMessages(updatedMessages);
         setIsLoading(false);
         await updateChatMessages(chatId, updatedMessages);
         return;
       }
-      
-      // Notify credits update if available
       if (typeof result === 'object' && result.remainingCredits !== undefined) {
         notifyCreditsUpdate(result.remainingCredits);
       }
@@ -780,13 +779,20 @@ const DevPage = () => {
       }
 
       let content: string;
+      let interviewPayload: ChatMessageType['interviewPayload'];
+      let prompt: string | undefined;
+      let tier2Context: string | undefined;
       if (parsed.kind === 'general_response') {
         content = parsed.payload.response;
       } else if (parsed.kind === 'interview_user') {
-        // Placeholder until full interview UI; show first question description or short message
-        content = parsed.payload.questions?.length
-          ? parsed.payload.questions[0].description ?? 'Questions received.'
-          : 'Questions received.';
+        content = 'Answer the questions below.';
+        interviewPayload = parsed.payload;
+      } else if (parsed.kind === 'tier_1') {
+        content = parsed.payload.response;
+        prompt = parsed.payload.prompt;
+      } else if (parsed.kind === 'tier_2') {
+        content = parsed.payload.response;
+        tier2Context = parsed.payload.context;
       } else {
         content = parsed.text;
       }
@@ -795,17 +801,69 @@ const DevPage = () => {
         id: Date.now().toString(),
         type: 'assistant',
         content,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        ...(interviewPayload && { interviewPayload }),
+        ...(prompt !== undefined && { prompt }),
+        ...(tier2Context !== undefined && { tier2Context }),
       };
-      const updatedMessages = [...currentMessages, assistantMessage];
+      const updatedMessages = [...messagesWithUserMessage, assistantMessage];
       setMessages(updatedMessages);
       setIsLoading(false);
       await updateChatMessages(chatId, updatedMessages);
     } catch (error) {
-      console.error("Error processing initial message:", error);
-    } finally {
+      console.error('Error calling chatbot:', error);
       setIsLoading(false);
+      await options?.onError?.(messagesWithUserMessage);
     }
+  };
+
+  // Process the initial message when loading a chat
+  const processInitialMessage = async (initialMessage: string, currentMessages: ChatMessageType[]) => {
+    setIsLoading(true);
+    await processChatbotResponse(initialMessage, currentMessages, currentMessages);
+  };
+
+  const handleInterviewComplete = async (messageId: string, answers: InterviewAnswer[]) => {
+    const idx = messages.findIndex((m) => m.id === messageId);
+    if (idx < 0) return;
+    const msg = messages[idx];
+    if (!msg?.interviewPayload) return;
+    const updated = messages.map((m, i) =>
+      i === idx ? { ...m, interviewAnswers: answers } : m
+    );
+    setMessages(updated);
+    await updateChatMessages(chatId, updated);
+
+    // Build history for API: the message with interview answers must have content the backend uses as {interviewAnswers}
+    const answersContent = formatInterviewAnswersForApi(msg.interviewPayload.questions, answers);
+    const messagesForApi = updated.map((m, i) =>
+      i === idx ? { ...m, content: answersContent } : m
+    );
+
+    setIsLoading(true);
+    await processChatbotResponse(
+      'I have completed the interview.',
+      messagesForApi,
+      updated,
+      {
+        isInterviewed: true,
+        onError: async (messagesWithUser) => {
+          const errorMessage: ChatMessageType = {
+            id: (Date.now() + 1).toString(),
+            type: 'assistant',
+            content: 'Sorry, I encountered an error while processing your request. Please try again.',
+            timestamp: new Date().toISOString()
+          };
+          const finalMessages = [...messagesWithUser, errorMessage];
+          setMessages(finalMessages);
+          try {
+            await addMessageToChat(chatId, errorMessage);
+          } catch (saveError) {
+            console.error('Error saving error message:', saveError);
+          }
+        }
+      }
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -911,87 +969,24 @@ const DevPage = () => {
         }
         setIsLoading(false);
       }
-    }else{
-      try {
-        const result = await chatbot(currentInput, messages, user?.id ?? null);
-        
-        // Handle insufficient credits
-        if (typeof result === 'object' && result.error === 'INSUFFICIENT_CREDITS') {
-          if (result.remainingCredits !== undefined) {
-            notifyCreditsUpdate(result.remainingCredits);
-          }
-          setShowLowSoulsDialog(true);
-          const assistantMessage: ChatMessageType = {
-            id: Date.now().toString(),
+    } else {
+      await processChatbotResponse(currentInput, messages, updatedMessagesWithUser, {
+        onError: async (messagesWithUser) => {
+          const errorMessage: ChatMessageType = {
+            id: (Date.now() + 1).toString(),
             type: 'assistant',
-            content: 'Your souls count is low. Please upgrade or buy more souls to continue.',
+            content: 'Sorry, I encountered an error while processing your request. Please try again.',
             timestamp: new Date().toISOString()
           };
-          const updatedMessages = [...updatedMessagesWithUser, assistantMessage];
-          setMessages(updatedMessages);
-          setIsLoading(false);
-          await updateChatMessages(chatId, updatedMessages);
-          return;
+          const finalMessages = [...messagesWithUser, errorMessage];
+          setMessages(finalMessages);
+          try {
+            await addMessageToChat(chatId, errorMessage);
+          } catch (saveError) {
+            console.error('Error saving error message:', saveError);
+          }
         }
-        
-        // Notify credits update if available
-        if (typeof result === 'object' && result.remainingCredits !== undefined) {
-          notifyCreditsUpdate(result.remainingCredits);
-        }
-
-        const response = typeof result === 'object' ? result?.response : undefined;
-        const terminatingTool = typeof result === 'object' ? result?.terminatingTool : undefined;
-        const parsed = parseChatbotResult(response, terminatingTool);
-
-        if (parsed === null) {
-          setIsLoading(false);
-          return;
-        }
-
-        let content: string;
-        if (parsed.kind === 'general_response') {
-          content = parsed.payload.response;
-        } else if (parsed.kind === 'interview_user') {
-          content = parsed.payload.questions?.length
-            ? parsed.payload.questions[0].description ?? 'Questions received.'
-            : 'Questions received.';
-        } else {
-          content = parsed.text;
-        }
-
-        const formattedContent = formatAssistantContent(content);
-        const assistantMessage: ChatMessageType = {
-          id: Date.now().toString(),
-          type: 'assistant',
-          content: formattedContent,
-          timestamp: new Date().toISOString()
-        };
-        const updatedMessages = [...updatedMessagesWithUser, assistantMessage];
-        setMessages(updatedMessages);
-        setIsLoading(false);
-        await updateChatMessages(chatId, updatedMessages);
-      } catch (error) {
-        console.error('Error calling chatbot:', error);
-        
-        const errorMessage: ChatMessageType = {
-          id: (Date.now() + 1).toString(),
-          type: 'assistant',
-          content: 'Sorry, I encountered an error while processing your request. Please try again.',
-          timestamp: new Date().toISOString()
-        };
-        
-        const finalMessages = [...updatedMessagesWithUser, errorMessage];
-        setMessages(finalMessages);
-        
-        // Save error message to database
-        try {
-          await addMessageToChat(chatId, errorMessage);
-        } catch (saveError) {
-          console.error('Error saving error message:', saveError);
-        }
-        
-        setIsLoading(false);
-      }
+      });
     }
 
     
@@ -1542,6 +1537,7 @@ const DevPage = () => {
                 onGenerateDocs={handleGenerateDocs}
                 docsButtonRef={docsButtonRef}
                 messagesEndRef={messagesEndRef}
+                onInterviewComplete={handleInterviewComplete}
               />
 
             
@@ -1731,6 +1727,7 @@ const DevPage = () => {
                 onGenerateDocs={handleGenerateDocs}
                 docsButtonRef={docsButtonRef}
                 messagesEndRef={messagesEndRef}
+                onInterviewComplete={handleInterviewComplete}
               />
 
             

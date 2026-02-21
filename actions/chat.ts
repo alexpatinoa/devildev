@@ -12,7 +12,9 @@ export interface ChatMessage {
   timestamp: string;
   isStreaming?: boolean;
   interviewPayload?: InterviewPayload;
-  interviewAnswers?: InterviewAnswer[];
+  interviewAnswers?: InterviewAnswer[]; 
+  prompt?: string;
+  tier2Context?: string;
 }
 
 // Create a new chat with a specific ID (for localStorage flow)

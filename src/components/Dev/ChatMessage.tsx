@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Image from 'next/image';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
+import { Copy, Check } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { ChatMessage as ChatMessageType } from '../../../actions/chat';
 import { InterviewBlock } from './InterviewBlock';
@@ -23,6 +24,14 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   userInitial = 'U',
   onInterviewComplete,
 }) => {
+  const [copiedPromptMessageId, setCopiedPromptMessageId] = useState<string | null>(null);
+
+  const handleCopyPrompt = (messageId: string, prompt: string) => {
+    navigator.clipboard.writeText(prompt);
+    setCopiedPromptMessageId(messageId);
+    setTimeout(() => setCopiedPromptMessageId(null), 2000);
+  };
+
   const isInterviewComplete =
     message.interviewPayload &&
     message.interviewAnswers &&
@@ -112,9 +121,34 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           </Avatar>
         </div>
       )}
-      <div className={`max-w-[80%] rounded-2xl px-2 py-1 ${message.type === 'user' ? 'text-white' : 'text-white'}`}>
-        {message.type === 'assistant' ? renderAssistantContent() : (
-          <p className="text-sm md:text-base whitespace-pre-wrap">{message.content}</p>
+      <div className="flex flex-col max-w-[80%]">
+        <div className={`rounded-2xl px-2 py-1 ${message.type === 'user' ? 'text-white' : 'text-white'}`}>
+          {message.type === 'assistant' ? renderAssistantContent() : (
+            <p className="text-sm md:text-base whitespace-pre-wrap">{message.content}</p>
+          )}
+        </div>
+        {/* Prompt box - only show for assistant messages with prompt (tier_1) */}
+        {message.type === 'assistant' && message.prompt && (
+          <div className="w-full mt-3">
+            <div className="border border-gray-600 rounded-lg bg-gray-900/30 relative">
+              <button
+                onClick={() => handleCopyPrompt(message.id, message.prompt!)}
+                className="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-white hover:bg-gray-700/50 rounded-md transition-all duration-200 z-10"
+                title="Copy prompt"
+              >
+                {copiedPromptMessageId === message.id ? (
+                  <Check className="h-4 w-4 text-green-400" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+              </button>
+              <div className="p-3 pr-12 max-h-60 overflow-y-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-600 hover:scrollbar-thumb-gray-500">
+                <pre className="text-sm text-gray-300 whitespace-pre-wrap font-mono break-words">
+                  {message.prompt}
+                </pre>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

@@ -2,6 +2,7 @@ import React from 'react';
 import Image from 'next/image';
 import { ChatMessage as ChatMessageType } from '../../../actions/chat';
 import { ChatMessage } from './ChatMessage';
+import type { InterviewAnswer } from '../../../types/pToA/tools';
 
 interface ChatMessageListProps {
   messages: ChatMessageType[];
@@ -17,6 +18,7 @@ interface ChatMessageListProps {
   onGenerateDocs: () => void;
   docsButtonRef: React.RefObject<HTMLButtonElement | null>;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
+  onInterviewComplete?: (messageId: string, answers: InterviewAnswer[]) => void;
 }
 
 export const ChatMessageList: React.FC<ChatMessageListProps> = ({
@@ -33,6 +35,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   onGenerateDocs,
   docsButtonRef,
   messagesEndRef,
+  onInterviewComplete,
 }) => {
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-600 hover:scrollbar-thumb-gray-500">
@@ -43,6 +46,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
             index={messages.indexOf(message)}
             userImageUrl={userImageUrl}
             userInitial={userInitial}
+            onInterviewComplete={onInterviewComplete}
           />
         </div>
       ))} 
