@@ -11,6 +11,7 @@ import { AgentExecutor, createToolCallingAgent } from "langchain/agents";
 import { TokenUsageCallbackHandler } from "../common/TokenUsageHandler";
 import { TERMINATING_TOOLS, TerminatingTools } from "../types/pToA/tools";
 import { tier1Tool } from "../ptoA-tools/tier-1";
+import { tier2Tool } from "../ptoA-tools/tier-2";
 
 // Return type for agent flow functions
 export type AgentFlowResult = {
@@ -45,7 +46,7 @@ export async function chatbot(userInput: string, conversationHistory: any[] = []
         ? `${conversationHistory[conversationHistory.length - 1].type === 'user' ? 'User' : 'Assistant'}: ${conversationHistory[conversationHistory.length - 1].content}`
         : "";
 
-    const tools = [interviewTool, generalResTool, tier1Tool, tier1Tool];
+    const tools = [interviewTool, generalResTool, tier1Tool, tier2Tool];
 
     let systemRole = "";
 
