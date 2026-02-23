@@ -72,9 +72,22 @@ model Chat {
   title          String?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
-  architecture   Architecture[]
+  architecture   Architecture[]  @relation("ChatArchitectures")
+  archOptions    ArchOptions[]   @relation("ChatArchOptions")
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   contextualDocs ContextualDocs?
+}
+
+model Stack {
+  id String @id @default(uuid())
+  name String
+  description String
+  pros String[]
+  cons String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  architecture Architecture[] @relation("StackArchitectures")
+  archOptions  ArchOptions[]
 }
 
 model Architecture {
@@ -91,7 +104,20 @@ model Architecture {
   lastPositionUpdate    DateTime @default(now())
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
-  chat                  Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  chat                  Chat     @relation("ChatArchitectures", fields: [chatId], references: [id], onDelete: Cascade)
+  stackId               String?
+  stack                 Stack?   @relation("StackArchitectures", fields: [stackId], references: [id])
+}
+
+model ArchOptions {
+  id          String    @id @default(uuid())
+  chatId      String
+  stacks      Stack[]
+  requirement String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  chat        Chat      @relation("ChatArchOptions", fields: [chatId], references: [id], onDelete: Cascade)
 }
 
 model ContextualDocs {
