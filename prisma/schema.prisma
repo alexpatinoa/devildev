@@ -82,6 +82,7 @@ model Stack {
   id String @id @default(uuid())
   name String
   description String
+  technology String
   pros String[]
   cons String[]
   createdAt DateTime @default(now())

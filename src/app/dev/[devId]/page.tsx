@@ -13,6 +13,7 @@ import { submitFeedback } from '../../../../actions/feedback';
 import { notifyCreditsUpdate, refetchCredits } from '@/lib/credits-events';
 import { triggerArchitectureGeneration } from '../../../../actions/architecture'; 
 import { getChat, addMessageToChat, updateChatMessages, createChatWithId, ChatMessage as ChatMessageType, getUserChats } from '../../../../actions/chat';
+import { createArchOptionsFromTier2, getLatestArchOptions } from '../../../../actions/archOptions';
 import {
   getArchitecture, 
   updateComponentPositionsDebounced,
@@ -33,6 +34,7 @@ import { useParams } from 'next/navigation';
 import { maxChatCharactersLimitFree, maxChatCharactersLimitPro } from '../../../../Limits';
 import useUserSubscription from '@/hooks/useSubscription';
 import PricingDialog from '@/components/PricingDialog';
+import { StackOptions } from '@/components/core/StackOptions';
 
 interface UserChat {
   id: string;
@@ -60,6 +62,19 @@ interface ArchitectureVersion {
     createdAt: Date;
     updatedAt: Date;
   };
+}
+
+interface ArchOptionsData {
+  id: string;
+  requirement: string | null;
+  stacks: Array<{
+    id: string;
+    name: string;
+    description: string;
+    technology: string;
+    pros: string[];
+    cons: string[];
+  }>;
 }
 
 // Helper function to convert number to Roman numerals
@@ -192,6 +207,10 @@ const DevPage = () => {
   const [architectureData, setArchitectureData] = useState<ArchitectureData | null>(null);
   const [isArchitectureLoading, setIsArchitectureLoading] = useState(false);
   const [architectureGenerated, setArchitectureGenerated] = useState(false);
+  const [archOptions, setArchOptions] = useState<ArchOptionsData | null>(null);
+  const [archOptionsLoading, setArchOptionsLoading] = useState(false);
+  const [selectedStackId, setSelectedStackId] = useState<string | null>(null);
+  const [showOptionsButton, setShowOptionsButton] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isNewChat, setIsNewChat] = useState(false);
   // Architecture versions state
@@ -474,6 +493,12 @@ const DevPage = () => {
               setContextualDocs(docsResult.contextualDocs);
               syncIndividualStates(docsResult.contextualDocs);
               setDocsGenerated(true);
+            }
+
+            const archOptionsResult = await getLatestArchOptions(chatId);
+            if (archOptionsResult.success && archOptionsResult.archOptions) {
+              setArchOptions(archOptionsResult.archOptions);
+              setShowOptionsButton(true);
             }
 
           } else {
@@ -810,6 +835,32 @@ const DevPage = () => {
       setMessages(updatedMessages);
       setIsLoading(false);
       await updateChatMessages(chatId, updatedMessages);
+
+      if (tier2Context && chatId) {
+        setArchOptionsLoading(true);
+        try {
+          const optionsResult = await createArchOptionsFromTier2(chatId, tier2Context);
+          if (typeof optionsResult === 'object' && optionsResult.error === 'INSUFFICIENT_CREDITS') {
+            if (optionsResult.remainingCredits !== undefined) {
+              notifyCreditsUpdate(optionsResult.remainingCredits);
+            }
+            setShowLowSoulsDialog(true);
+            setArchOptionsLoading(false);
+            return;
+          }
+          if (typeof optionsResult === 'object' && optionsResult.remainingCredits !== undefined) {
+            notifyCreditsUpdate(optionsResult.remainingCredits);
+          }
+          if (optionsResult.success && optionsResult.archOptions) {
+            setArchOptions(optionsResult.archOptions);
+            setShowOptionsButton(true);
+          }
+        } catch (optionsError) {
+          console.error('Error creating arch options:', optionsError);
+        } finally {
+          setArchOptionsLoading(false);
+        }
+      }
     } catch (error) {
       console.error('Error calling chatbot:', error);
       setIsLoading(false);
@@ -1184,6 +1235,13 @@ const DevPage = () => {
     }
   }
 
+  const handleViewOptions = () => {
+    setActiveTab('architecture');
+    if (isMobile) {
+      setIsMobilePanelOpen(true);
+    }
+  };
+
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputMessage(e.target.value);
      
@@ -1533,8 +1591,11 @@ const DevPage = () => {
                 docsGenerated={docsGenerated}
                 isStreamingDocs={isStreamingDocs}
                 isMobile={isMobile}
+                showOptionsButton={showOptionsButton}
+                isOptionsLoading={archOptionsLoading}
                 userInitial={user?.firstName?.charAt(0) || user?.emailAddresses?.[0]?.emailAddress.charAt(0) || "U"}
                 onGenerateDocs={handleGenerateDocs}
+                onViewOptions={handleViewOptions}
                 docsButtonRef={docsButtonRef}
                 messagesEndRef={messagesEndRef}
                 onInterviewComplete={handleInterviewComplete}
@@ -1669,12 +1730,22 @@ const DevPage = () => {
               {/* Tab Content */}
               <div className="flex-1 overflow-hidden min-h-0 p-4">
                 <div className={`h-full ${activeTab === 'architecture' ? 'block' : 'hidden'}`}>
-                  <Architecture 
-                    architectureData={architectureData || undefined} 
-                    isLoading={isArchitectureLoading}
-                    customPositions={componentPositions}
-                    onPositionsChange={handlePositionChange}
-                  />
+                  {archOptions ? (
+                    <StackOptions
+                      options={archOptions.stacks || []}
+                      selectedStackId={selectedStackId}
+                      onSelect={setSelectedStackId}
+                      isLoading={archOptionsLoading}
+                      requirement={archOptions.requirement}
+                    />
+                  ) : (
+                    <Architecture 
+                      architectureData={architectureData || undefined} 
+                      isLoading={isArchitectureLoading}
+                      customPositions={componentPositions}
+                      onPositionsChange={handlePositionChange}
+                    />
+                  )}
                 </div>
                 
                 <div className={`h-full ${activeTab === 'context' ? 'block' : 'hidden'}`}>
@@ -1723,8 +1794,11 @@ const DevPage = () => {
                 docsGenerated={docsGenerated}
                 isStreamingDocs={isStreamingDocs}
                 isMobile={isMobile}
+                showOptionsButton={showOptionsButton}
+                isOptionsLoading={archOptionsLoading}
                 userInitial={user?.firstName?.charAt(0) || user?.emailAddresses?.[0]?.emailAddress.charAt(0) || "U"}
                 onGenerateDocs={handleGenerateDocs}
+                onViewOptions={handleViewOptions}
                 docsButtonRef={docsButtonRef}
                 messagesEndRef={messagesEndRef}
                 onInterviewComplete={handleInterviewComplete}
@@ -1894,12 +1968,22 @@ const DevPage = () => {
               {/* Content */}
               <div className="flex-1 overflow-y-auto p-4">
                 <div className={`h-full ${activeTab === 'architecture' ? 'block' : 'hidden'}`}>
-                  <Architecture 
-                    architectureData={architectureData || undefined} 
-                    isLoading={isArchitectureLoading}
-                    customPositions={componentPositions}
-                    onPositionsChange={handlePositionChange}
-                  />
+                  {archOptions ? (
+                    <StackOptions
+                      options={archOptions.stacks || []}
+                      selectedStackId={selectedStackId}
+                      onSelect={setSelectedStackId}
+                      isLoading={archOptionsLoading}
+                      requirement={archOptions.requirement}
+                    />
+                  ) : (
+                    <Architecture 
+                      architectureData={architectureData || undefined} 
+                      isLoading={isArchitectureLoading}
+                      customPositions={componentPositions}
+                      onPositionsChange={handlePositionChange}
+                    />
+                  )}
                 </div>
                 
                 <div className={`h-full ${activeTab === 'context' ? 'block' : 'hidden'}`}>
@@ -2164,4 +2248,3 @@ const DevPage = () => {
 };
 
 export default DevPage;
-
