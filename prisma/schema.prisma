@@ -76,6 +76,8 @@ model Chat {
   archOptions    ArchOptions[]   @relation("ChatArchOptions")
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   contextualDocs ContextualDocs?
+
+  @@index([userId, updatedAt(sort: Desc)])
 }
 
 model Stack {
@@ -108,6 +110,8 @@ model Architecture {
   chat                  Chat     @relation("ChatArchitectures", fields: [chatId], references: [id], onDelete: Cascade)
   stackId               String?
   stack                 Stack?   @relation("StackArchitectures", fields: [stackId], references: [id])
+
+  @@index([chatId, createdAt(sort: Asc)])
 }
 
 model ArchOptions {
@@ -119,6 +123,8 @@ model ArchOptions {
   updatedAt   DateTime  @updatedAt
 
   chat        Chat      @relation("ChatArchOptions", fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@index([chatId, createdAt(sort: Desc)])
 }
 
 model ContextualDocs {
