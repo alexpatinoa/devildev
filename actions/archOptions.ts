@@ -184,3 +184,31 @@ export async function getLatestArchOptions(chatId: string) {
     return { success: false, error: "Failed to get arch options" };
   }
 }
+
+export async function getArchOptionsHistory(chatId: string) {
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      throw new Error("User not authenticated");
+    }
+
+    const chat = await db.chat.findFirst({
+      where: { id: chatId, userId },
+    });
+
+    if (!chat) {
+      throw new Error("Chat not found or access denied");
+    }
+
+    const archOptions = await db.archOptions.findMany({
+      where: { chatId },
+      orderBy: { createdAt: "desc" },
+      include: { stacks: true },
+    });
+
+    return { success: true, archOptions };
+  } catch (error) {
+    console.error("Error getting arch options history:", error);
+    return { success: false, error: "Failed to get arch options history" };
+  }
+}

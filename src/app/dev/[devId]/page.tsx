@@ -13,7 +13,7 @@ import { submitFeedback } from '../../../../actions/feedback';
 import { notifyCreditsUpdate, refetchCredits } from '@/lib/credits-events';
 import { triggerArchitectureGeneration } from '../../../../actions/architecture'; 
 import { getChat, addMessageToChat, updateChatMessages, createChatWithId, ChatMessage as ChatMessageType, getUserChats } from '../../../../actions/chat';
-import { createArchOptionsFromTier2, getLatestArchOptions } from '../../../../actions/archOptions';
+import { createArchOptionsFromTier2, getArchOptionsHistory } from '../../../../actions/archOptions';
 import {
   getArchitecture, 
   updateComponentPositionsDebounced,
@@ -64,17 +64,21 @@ interface ArchitectureVersion {
   };
 }
 
+interface StackData {
+  id: string;
+  name: string;
+  description: string;
+  technology: string;
+  pros: string[];
+  cons: string[];
+}
+
 interface ArchOptionsData {
   id: string;
   requirement: string | null;
-  stacks: Array<{
-    id: string;
-    name: string;
-    description: string;
-    technology: string;
-    pros: string[];
-    cons: string[];
-  }>;
+  stacks: StackData[];
+  createdAt: Date | string;
+  updatedAt: Date | string;
 }
 
 // Helper function to convert number to Roman numerals
@@ -202,12 +206,13 @@ const DevPage = () => {
   const [isGeneratingDocs, setIsGeneratingDocs] = useState(false);
   const [currentStartOrNot, setCurrentStartOrNot] = useState(false);
   const [isChatMode, setIsChatMode] = useState(false);
-  const [activeTab, setActiveTab] = useState<'architecture' | 'context'>('architecture');
+  const [activeTab, setActiveTab] = useState<'architecture' | 'stacks' | 'context'>('architecture');
   const [particles, setParticles] = useState<Particle[]>([]);
   const [architectureData, setArchitectureData] = useState<ArchitectureData | null>(null);
   const [isArchitectureLoading, setIsArchitectureLoading] = useState(false);
   const [architectureGenerated, setArchitectureGenerated] = useState(false);
-  const [archOptions, setArchOptions] = useState<ArchOptionsData | null>(null);
+  const [archOptionsHistory, setArchOptionsHistory] = useState<ArchOptionsData[]>([]);
+  const [selectedArchOptionsId, setSelectedArchOptionsId] = useState<string | null>(null);
   const [archOptionsLoading, setArchOptionsLoading] = useState(false);
   const [selectedStackId, setSelectedStackId] = useState<string | null>(null);
   const [showOptionsButton, setShowOptionsButton] = useState(false);
@@ -277,6 +282,10 @@ const DevPage = () => {
   
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const selectedArchOptions = React.useMemo(
+    () => archOptionsHistory.find((optionSet) => optionSet.id === selectedArchOptionsId) ?? null,
+    [archOptionsHistory, selectedArchOptionsId]
+  );
 
   const { isLoaded, isSignedIn, user } = useUser();
   const router = useRouter();
@@ -342,6 +351,26 @@ const DevPage = () => {
       document.body.classList.remove('mobile-panel-open');
     };
   }, [isMobilePanelOpen]);
+
+  useEffect(() => {
+    if (archOptionsHistory.length === 0) {
+      setSelectedArchOptionsId(null);
+      setSelectedStackId(null);
+      return;
+    }
+
+    if (selectedArchOptionsId && !archOptionsHistory.some((optionSet) => optionSet.id === selectedArchOptionsId)) {
+      setSelectedArchOptionsId(null);
+    }
+  }, [archOptionsHistory, selectedArchOptionsId]);
+
+  useEffect(() => {
+    if (!selectedArchOptions || !selectedStackId) return;
+    const stackExists = selectedArchOptions.stacks.some((stack) => stack.id === selectedStackId);
+    if (!stackExists) {
+      setSelectedStackId(null);
+    }
+  }, [selectedArchOptions, selectedStackId]);
 
   // Handle resize start
   const handleResizeStart = (e: React.MouseEvent) => {
@@ -495,10 +524,10 @@ const DevPage = () => {
               setDocsGenerated(true);
             }
 
-            const archOptionsResult = await getLatestArchOptions(chatId);
+            const archOptionsResult = await getArchOptionsHistory(chatId);
             if (archOptionsResult.success && archOptionsResult.archOptions) {
-              setArchOptions(archOptionsResult.archOptions);
-              setShowOptionsButton(true);
+              setArchOptionsHistory(archOptionsResult.archOptions);
+              setShowOptionsButton(archOptionsResult.archOptions.length > 0);
             }
 
           } else {
@@ -852,8 +881,17 @@ const DevPage = () => {
             notifyCreditsUpdate(optionsResult.remainingCredits);
           }
           if (optionsResult.success && optionsResult.archOptions) {
-            setArchOptions(optionsResult.archOptions);
+            setArchOptionsHistory((previous) => {
+              const withoutCurrent = previous.filter((optionSet) => optionSet.id !== optionsResult.archOptions.id);
+              return [optionsResult.archOptions, ...withoutCurrent];
+            });
+            setSelectedArchOptionsId(optionsResult.archOptions.id);
+            setSelectedStackId(null);
             setShowOptionsButton(true);
+            setActiveTab('stacks');
+            if (isMobile) {
+              setIsMobilePanelOpen(true);
+            }
           }
         } catch (optionsError) {
           console.error('Error creating arch options:', optionsError);
@@ -1235,8 +1273,15 @@ const DevPage = () => {
     }
   }
 
+  const handleSelectOptionSet = (optionSetId: string | null) => {
+    setSelectedArchOptionsId(optionSetId);
+    if (optionSetId === null) {
+      setSelectedStackId(null);
+    }
+  };
+
   const handleViewOptions = () => {
-    setActiveTab('architecture');
+    setActiveTab('stacks');
     if (isMobile) {
       setIsMobilePanelOpen(true);
     }
@@ -1649,6 +1694,17 @@ const DevPage = () => {
                   >
                     Architecture
                   </button>
+
+                  <button
+                    onClick={() => setActiveTab('stacks')}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${
+                      activeTab === 'stacks'
+                        ? 'text-white bg-gray-700/50'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    Stack Options
+                  </button>
                   
                   <button
                     onClick={() => setActiveTab('context')}
@@ -1730,22 +1786,23 @@ const DevPage = () => {
               {/* Tab Content */}
               <div className="flex-1 overflow-hidden min-h-0 p-4">
                 <div className={`h-full ${activeTab === 'architecture' ? 'block' : 'hidden'}`}>
-                  {archOptions ? (
-                    <StackOptions
-                      options={archOptions.stacks || []}
-                      selectedStackId={selectedStackId}
-                      onSelect={setSelectedStackId}
-                      isLoading={archOptionsLoading}
-                      requirement={archOptions.requirement}
-                    />
-                  ) : (
-                    <Architecture 
-                      architectureData={architectureData || undefined} 
-                      isLoading={isArchitectureLoading}
-                      customPositions={componentPositions}
-                      onPositionsChange={handlePositionChange}
-                    />
-                  )}
+                  <Architecture 
+                    architectureData={architectureData || undefined} 
+                    isLoading={isArchitectureLoading}
+                    customPositions={componentPositions}
+                    onPositionsChange={handlePositionChange}
+                  />
+                </div>
+
+                <div className={`h-full ${activeTab === 'stacks' ? 'block' : 'hidden'}`}>
+                  <StackOptions
+                    optionSets={archOptionsHistory}
+                    selectedOptionSetId={selectedArchOptionsId}
+                    onSelectOptionSet={handleSelectOptionSet}
+                    selectedStackId={selectedStackId}
+                    onSelect={setSelectedStackId}
+                    isLoading={archOptionsLoading}
+                  />
                 </div>
                 
                 <div className={`h-full ${activeTab === 'context' ? 'block' : 'hidden'}`}>
@@ -1840,6 +1897,20 @@ const DevPage = () => {
                   >
                     Architecture
                   </button>
+
+                  <button
+                    onClick={() => {
+                      setActiveTab('stacks');
+                      setIsMobilePanelOpen(true);
+                    }}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${
+                      activeTab === 'stacks'
+                        ? 'text-white bg-gray-700/50'
+                        : 'text-gray-400'
+                    }`}
+                  >
+                    Stacks
+                  </button>
                   
                   <button
                     onClick={() => {
@@ -1869,7 +1940,11 @@ const DevPage = () => {
               {/* Content preview area */}
               <div className="flex-1 p-4 flex items-center justify-center">
                 <div className="text-gray-400 text-sm text-center">
-                  {activeTab === 'architecture' ? 'Tap to view architecture' : 'Tap to view documentation'}
+                  {activeTab === 'architecture'
+                    ? 'Tap to view architecture'
+                    : activeTab === 'stacks'
+                      ? 'Tap to view stack options'
+                      : 'Tap to view documentation'}
                 </div>
               </div>
             </div>
@@ -1890,6 +1965,17 @@ const DevPage = () => {
                     }`}
                   >
                     Architecture
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab('stacks')}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${
+                      activeTab === 'stacks'
+                        ? 'text-white bg-gray-700/50'
+                        : 'text-gray-400'
+                    }`}
+                  >
+                    Stack Options
                   </button>
                   
                   <button
@@ -1968,22 +2054,23 @@ const DevPage = () => {
               {/* Content */}
               <div className="flex-1 overflow-y-auto p-4">
                 <div className={`h-full ${activeTab === 'architecture' ? 'block' : 'hidden'}`}>
-                  {archOptions ? (
-                    <StackOptions
-                      options={archOptions.stacks || []}
-                      selectedStackId={selectedStackId}
-                      onSelect={setSelectedStackId}
-                      isLoading={archOptionsLoading}
-                      requirement={archOptions.requirement}
-                    />
-                  ) : (
-                    <Architecture 
-                      architectureData={architectureData || undefined} 
-                      isLoading={isArchitectureLoading}
-                      customPositions={componentPositions}
-                      onPositionsChange={handlePositionChange}
-                    />
-                  )}
+                  <Architecture 
+                    architectureData={architectureData || undefined} 
+                    isLoading={isArchitectureLoading}
+                    customPositions={componentPositions}
+                    onPositionsChange={handlePositionChange}
+                  />
+                </div>
+
+                <div className={`h-full ${activeTab === 'stacks' ? 'block' : 'hidden'}`}>
+                  <StackOptions
+                    optionSets={archOptionsHistory}
+                    selectedOptionSetId={selectedArchOptionsId}
+                    onSelectOptionSet={handleSelectOptionSet}
+                    selectedStackId={selectedStackId}
+                    onSelect={setSelectedStackId}
+                    isLoading={archOptionsLoading}
+                  />
                 </div>
                 
                 <div className={`h-full ${activeTab === 'context' ? 'block' : 'hidden'}`}>
