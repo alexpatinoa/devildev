@@ -5,13 +5,13 @@ import { architectureModificationPrompt, BASE_DEVILDEV_AGENT_PROMPT, DevilDevAge
 import { deductCredits, getCredits } from "./credits";
 import { minSoulsToSendMessage } from "../Limits";
 import { extractTextContent } from "@/lib/ai/extractTextContent";
-import { interviewTool } from "../ptoA-tools/interview";
-import { generalResTool } from "../ptoA-tools/general_res";
+import { interviewTool } from "../tools/ptoA-tools/interview";
+import { generalResTool } from "../tools/ptoA-tools/general_res";
 import { AgentExecutor, createToolCallingAgent } from "langchain/agents";
 import { TokenUsageCallbackHandler } from "../common/TokenUsageHandler";
 import { TERMINATING_TOOLS, TerminatingTools } from "../types/pToA/tools";
-import { tier1Tool } from "../ptoA-tools/tier-1";
-import { tier2Tool } from "../ptoA-tools/tier-2";
+import { tier1Tool } from "../tools/ptoA-tools/tier-1";
+import { tier2Tool } from "../tools/ptoA-tools/tier-2";
 
 // Return type for agent flow functions
 export type AgentFlowResult = {
