@@ -824,7 +824,9 @@ const DevPage = () => {
       if (tier2Context && chatId) {
         setArchOptionsLoading(true);
         try {
+          setIsLoading(true);
           const optionsResult = await createArchOptionsFromTier2(chatId, tier2Context);
+          setIsLoading(false);
           if (typeof optionsResult === 'object' && optionsResult.error === 'INSUFFICIENT_CREDITS') {
             if (optionsResult.remainingCredits !== undefined) {
               notifyCreditsUpdate(optionsResult.remainingCredits);
@@ -869,6 +871,7 @@ const DevPage = () => {
   };
 
   const handleInterviewComplete = async (messageId: string, answers: InterviewAnswer[]) => {
+    setIsLoading(true);
     const idx = messages.findIndex((m) => m.id === messageId);
     if (idx < 0) return;
     const msg = messages[idx];
@@ -884,8 +887,6 @@ const DevPage = () => {
     const messagesForApi = updated.map((m, i) =>
       i === idx ? { ...m, content: answersContent } : m
     );
-
-    setIsLoading(true);
     await processChatbotResponse(
       'I have completed the interview.',
       messagesForApi,

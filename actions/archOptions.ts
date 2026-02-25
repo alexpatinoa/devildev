@@ -9,7 +9,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { createParallelWebSearchTool } from "../tools/parallel";
 import { TokenUsageCallbackHandler } from "../common/TokenUsageHandler";
-import { STACK_OPTIONS_PROMPT } from "../prompts/StackOptions";
+import { STACK_OPTIONS_PROMPT, STACK_OPTIONS_PROMPT2 } from "../prompts/StackOptions";
 import { deductCredits, getCredits } from "./credits";
 import { minSoulsToSendMessage } from "../Limits";
 
@@ -82,8 +82,8 @@ export async function createArchOptionsFromTier2(chatId: string, tier2Context: s
 
     const tools = [createParallelWebSearchTool()];
     const prompt = ChatPromptTemplate.fromMessages([
-      ["system", STACK_OPTIONS_PROMPT],
-      ["user", "Requirement:\n{requirement}\n\nReturn JSON only."],
+      ["system", STACK_OPTIONS_PROMPT2],
+      ["user", "Give me distinct architecture options based on requirement:\n{requirement}\n\nReturn JSON only."],
       new MessagesPlaceholder("agent_scratchpad"),
     ]);
 
