@@ -21,13 +21,7 @@ import {
   ArchitectureData,
   ComponentPosition
 } from '../../../../actions/architecturePersistence';
-import {
-  saveContextualDocs,
-  getContextualDocs,
-  ContextualDocsData
-} from '../../../../actions/contextualDocsPersistence';
 import FileExplorer from '@/components/core/ContextDocs';
-import { CoachMark } from '@/components/CoachMarks';
 import { useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import { useParams } from 'next/navigation';
@@ -204,7 +198,6 @@ const DevPage = () => {
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingChat, setIsLoadingChat] = useState(false);
-  const [isGeneratingDocs, setIsGeneratingDocs] = useState(false);
   const [currentStartOrNot, setCurrentStartOrNot] = useState(false);
   const [isChatMode, setIsChatMode] = useState(false);
   const [activeTab, setActiveTab] = useState<'architecture' | 'stacks' | 'context'>('architecture');
@@ -229,23 +222,6 @@ const DevPage = () => {
   const generatedStackIds = React.useMemo(() => {
     return allArchitectures.map(arch => arch.metadata?.stackId).filter(Boolean) as string[];
   }, [allArchitectures]);
-
-  // Contextual docs state
-  const [contextualDocs, setContextualDocs] = useState<ContextualDocsData>({});
-  const [docsGenerated, setDocsGenerated] = useState(false);
-
-  // Individual doc states for backward compatibility with existing components
-  const [projectRules, setProjectRules] = useState<string>("");
-  const [plan, setPlan] = useState<string>("");
-  const [prd, setPrd] = useState<string>("");
-  const [phaseCount, setPhaseCount] = useState<any>();
-  const [phases, setPhase] = useState<string[]>([]);
-  const [projectStructure, setProjectStructure] = useState<string>("");
-  const [uiUX, setUiUX] = useState<string>("");
-
-  // New streaming state
-  const [streamingUpdates, setStreamingUpdates] = useState<Array<{ fileName: string, content: string, isComplete: boolean }>>([]);
-  const [isStreamingDocs, setIsStreamingDocs] = useState(false);
 
   // Component position persistence
   const [componentPositions, setComponentPositions] = useState<Record<string, ComponentPosition>>({});
@@ -275,14 +251,8 @@ const DevPage = () => {
   const [showCharacterLimitDialog, setShowCharacterLimitDialog] = useState(false);
   const [showLowSoulsDialog, setShowLowSoulsDialog] = useState(false);
 
-
   // Coach mark state
-  const [showDocsCoachMark, setShowDocsCoachMark] = useState(false);
-  const [showDownloadCoachMark, setShowDownloadCoachMark] = useState(false);
-  const [isArchitectureGeneratedOnce, setIsArchitectureGeneratedOnce] = useState(false);
   const { userSubscription, isLoadingUserSubscription, isErrorUserSubscription } = useUserSubscription();
-  const docsButtonRef = useRef<HTMLButtonElement>(null);
-  const downloadButtonRef = useRef<HTMLButtonElement>(null);
 
   // Mobile responsive state
   const [isMobilePanelOpen, setIsMobilePanelOpen] = useState(false);
@@ -399,39 +369,6 @@ const DevPage = () => {
     }
   };
 
-  // Helper function to sync individual doc states with contextualDocs
-  const syncIndividualStates = (docs: ContextualDocsData) => {
-    if (docs.projectRules) setProjectRules(docs.projectRules);
-    if (docs.plan) setPlan(docs.plan);
-    if (docs.prd) setPrd(docs.prd);
-    if (docs.phases) setPhase(docs.phases);
-    if (docs.phaseCount) setPhaseCount(docs.phaseCount);
-    if (docs.projectStructure) setProjectStructure(docs.projectStructure);
-    if (docs.uiUX) setUiUX(docs.uiUX);
-  };
-
-  // Helper function to save contextual docs
-  const saveDocsData = async (docsData: ContextualDocsData) => {
-    if (!chatId) return;
-
-    try {
-      const result = await saveContextualDocs({
-        chatId,
-        docsData,
-      });
-
-      if (result.success) {
-        setContextualDocs(docsData);
-        syncIndividualStates(docsData);
-        setDocsGenerated(true);
-      } else {
-        console.error('Failed to save contextual docs:', result.error);
-      }
-    } catch (error) {
-      console.error('Error saving contextual docs:', error);
-    }
-  };
-
   // Helper function to calculate total characters in messages
   const calculateTotalCharacters = (messagesArray: ChatMessageType[]) => {
     if (!messagesArray || !Array.isArray(messagesArray)) {
@@ -523,14 +460,6 @@ const DevPage = () => {
             }
 
             setIsLoadingChat(false);
-
-            // Load contextual docs data if it exists
-            const docsResult = await getContextualDocs(chatId);
-            if (docsResult.success && docsResult.contextualDocs) {
-              setContextualDocs(docsResult.contextualDocs);
-              syncIndividualStates(docsResult.contextualDocs);
-              setDocsGenerated(true);
-            }
 
             const archOptionsResult = await getArchOptionsHistory(chatId);
             if (archOptionsResult.success && archOptionsResult.archOptions) {
@@ -644,50 +573,10 @@ const DevPage = () => {
   }, [isSignedIn, isLoaded]);
 
 
-  // Auto-scroll to bottom when messages change, or to docs button when it appears
+  // Auto-scroll to bottom when messages change
   useEffect(() => {
-    // Check if docs button should be visible and scroll to it
-    const shouldShowDocsButton = !isLoading && !isArchitectureLoading && !isGeneratingDocs && architectureData;
-
-    if (shouldShowDocsButton && docsButtonRef.current) {
-      // Small delay to ensure the button is rendered
-      const timer = setTimeout(() => {
-        docsButtonRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }, 100);
-      return () => clearTimeout(timer);
-    } else {
-      // Default scroll to messages end
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [messages, isLoading, isArchitectureLoading, isGeneratingDocs, architectureData]);
-
-  // Show coach mark for Generate Docs button when conditions are met
-  useEffect(() => {
-    const shouldShowCoachMark = !isLoading && !isArchitectureLoading && !isGeneratingDocs && architectureData && !docsGenerated && !isArchitectureGeneratedOnce;
-    if (shouldShowCoachMark && docsButtonRef.current) {
-      // Small delay to ensure the button is rendered
-      const timer = setTimeout(() => {
-        setShowDocsCoachMark(true);
-      }, 700);
-      return () => clearTimeout(timer);
-    } else {
-      setShowDocsCoachMark(false);
-    }
-  }, [isLoading, isArchitectureLoading, isGeneratingDocs, docsGenerated]);
-
-  // Show coach mark for Download button when docs are generated
-  useEffect(() => {
-    if (docsGenerated && !isStreamingDocs && downloadButtonRef.current) {
-      // Small delay to ensure the button is rendered and docs generation is complete
-      const timer = setTimeout(() => {
-        setActiveTab('context')
-        setShowDownloadCoachMark(true);
-      }, 1000);
-      return () => clearTimeout(timer);
-    } else {
-      setShowDownloadCoachMark(false);
-    }
-  }, [docsGenerated, isStreamingDocs]);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isLoading, isArchitectureLoading, architectureData]);
 
   const handleStackGenerate = async (stackOption: StackData) => {
     if (!chatId || !user?.id || !selectedArchOptions) return;
@@ -753,7 +642,6 @@ const DevPage = () => {
   const genArchitecture = async (requirement: string, conversationHistory: any[] = []) => {
 
     setIsArchitectureLoading(true);
-    setDocsGenerated(false);
 
     if (isMobile) {
       setIsMobilePanelOpen(true);
@@ -1053,7 +941,6 @@ const DevPage = () => {
     setTextareaHeight('60px');
 
     if (architectureData) {
-      setIsArchitectureGeneratedOnce(true);
       try {
         const result = await architectureModificationBot(currentInput, messages, architectureData, user?.id ?? null);
 
@@ -1145,201 +1032,7 @@ const DevPage = () => {
         }
       });
     }
-
-
-
-
   };
-
-  const handleGenerateDocs = async () => {
-    setIsGeneratingDocs(true);
-    // setIsLoading(true);
-    setActiveTab('context');
-    setIsStreamingDocs(true);
-    setStreamingUpdates([]);
-
-    try {
-      const response = await fetch('/api/generate-docs-stream', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messages,
-          architectureData
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      if (!response.body) {
-        throw new Error('No response body');
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-
-          if (done) break;
-
-          // Add new chunk to buffer
-          buffer += decoder.decode(value, { stream: true });
-
-          // Process complete messages from buffer
-          const messages = buffer.split('\n\n');
-
-          // Keep the last incomplete message in buffer
-          buffer = messages.pop() || '';
-
-          for (const message of messages) {
-            if (message.trim()) {
-              const lines = message.split('\n');
-
-              for (const line of lines) {
-                if (line.startsWith('data: ') && line.length > 6) {
-                  const jsonStr = line.slice(6).trim();
-
-                  try {
-                    if (jsonStr) {
-                      // Log for debugging
-
-                      const data = JSON.parse(jsonStr);
-
-                      if (data.type === 'update') {
-                        // Handle streaming update
-                        setStreamingUpdates(prev => {
-                          const existingIndex = prev.findIndex(update => update.fileName === data.fileName);
-                          const newUpdate = {
-                            fileName: data.fileName,
-                            content: data.content,
-                            isComplete: data.isComplete
-                          };
-
-                          if (existingIndex >= 0) {
-                            const updated = [...prev];
-                            updated[existingIndex] = newUpdate;
-                            return updated;
-                          } else {
-                            return [...prev, newUpdate];
-                          }
-                        });
-                      } else if (data.type === 'complete') {
-                        // Handle completion
-                        const result = data.result;
-                        setPhaseCount(result.phaseCount);
-                        setPhase(result.phases);
-                        setPrd(result.prd);
-                        setPlan(result.plan);
-                        setProjectStructure(result.projectStructure);
-                        setUiUX(result.uiUX);
-                        setProjectRules(result.projectRules);
-
-                        // Save all docs to database
-                        const docsData: ContextualDocsData = {
-                          plan: result.plan,
-                          prd: result.prd,
-                          projectStructure: result.projectStructure,
-                          uiUX: result.uiUX,
-                          projectRules: result.projectRules,
-                          phases: result.phases,
-                          phaseCount: result.phaseCount,
-                          isPlanComplete: !!result.plan,
-                          isPrdComplete: !!result.prd,
-                          isProjectStructureComplete: !!result.projectStructure,
-                          isUiUXComplete: !!result.uiUX,
-                          isProjectRulesComplete: !!result.projectRules,
-                          arePhasesComplete: !!result.phases?.length,
-                        };
-
-                        await saveDocsData(docsData);
-                      } else if (data.type === 'error') {
-                        console.error('Streaming error:', data.error);
-                        throw new Error(data.error);
-                      }
-                    }
-                  } catch (parseError) {
-                    console.error('Error parsing streaming data:', parseError);
-                    console.error('Problematic line:', line);
-                    console.error('JSON string length:', jsonStr?.length || 0);
-                    console.error('JSON preview:', jsonStr?.substring(0, 200) + '...');
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        // Process any remaining buffered data
-        if (buffer.trim()) {
-          const lines = buffer.split('\n');
-          for (const line of lines) {
-            if (line.startsWith('data: ') && line.length > 6) {
-              const jsonStr = line.slice(6).trim();
-
-              try {
-                if (jsonStr) {
-
-
-                  const data = JSON.parse(jsonStr);
-
-                  if (data.type === 'complete') {
-                    const result = data.result;
-                    setPhaseCount(result.phaseCount);
-                    setPhase(result.phases);
-                    setPrd(result.prd);
-                    setPlan(result.plan);
-                    setProjectStructure(result.projectStructure);
-                    setUiUX(result.uiUX);
-                    setProjectRules(result.projectRules);
-
-                    // Save all docs to database
-                    const docsData: ContextualDocsData = {
-                      plan: result.plan,
-                      prd: result.prd,
-                      projectStructure: result.projectStructure,
-                      uiUX: result.uiUX,
-                      projectRules: result.projectRules,
-                      phases: result.phases,
-                      phaseCount: result.phaseCount,
-                      isPlanComplete: !!result.plan,
-                      isPrdComplete: !!result.prd,
-                      isProjectStructureComplete: !!result.projectStructure,
-                      isUiUXComplete: !!result.uiUX,
-                      isProjectRulesComplete: !!result.projectRules,
-                      arePhasesComplete: !!result.phases?.length,
-                    };
-
-                    await saveDocsData(docsData);
-                  } else if (data.type === 'error') {
-                    console.error('Streaming error:', data.error);
-                    throw new Error(data.error);
-                  }
-                }
-              } catch (parseError) {
-                console.error('Error parsing remaining buffer data:', parseError);
-                console.error('Buffer line:', line);
-                console.error('Buffer JSON string length:', jsonStr?.length || 0);
-                console.error('Buffer JSON preview:', jsonStr?.substring(0, 200) + '...');
-              }
-            }
-          }
-        }
-      } finally {
-        reader.releaseLock();
-      }
-    } catch (error) {
-      console.error('Error generating docs:', error);
-    } finally {
-      setIsGeneratingDocs(false);
-      setIsStreamingDocs(false);
-    }
-  }
 
   const handleSelectOptionSet = (optionSetId: string | null) => {
     setSelectedArchOptionsId(optionSetId);
@@ -1689,18 +1382,12 @@ const DevPage = () => {
               <ChatMessageList
                 messages={messages}
                 isLoading={isLoading}
-                isGeneratingDocs={isGeneratingDocs}
                 isArchitectureLoading={isArchitectureLoading}
                 architectureData={architectureData}
-                docsGenerated={docsGenerated}
-                isStreamingDocs={isStreamingDocs}
-                isMobile={isMobile}
                 showOptionsButton={showOptionsButton}
                 isOptionsLoading={archOptionsLoading}
                 userInitial={user?.firstName?.charAt(0) || user?.emailAddresses?.[0]?.emailAddress.charAt(0) || "U"}
-                onGenerateDocs={handleGenerateDocs}
                 onViewOptions={handleViewOptions}
-                docsButtonRef={docsButtonRef}
                 messagesEndRef={messagesEndRef}
                 onInterviewComplete={handleInterviewComplete}
               />
@@ -1767,10 +1454,9 @@ const DevPage = () => {
                     className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'context'
                       ? 'text-white bg-gray-700/50'
                       : 'text-gray-400 hover:text-white'
-                      } ${(!docsGenerated && !isStreamingDocs && !isGeneratingDocs) ? 'disabled:hover:cursor-not-allowed' : ''}`}
-                    disabled={!docsGenerated && !isStreamingDocs && !isGeneratingDocs}
+                      }`}
                   >
-                    Contextual Docs
+                    Docs
                   </button>
                 </div>
 
@@ -1863,18 +1549,7 @@ const DevPage = () => {
                 </div>
 
                 <div className={`h-full ${activeTab === 'context' ? 'block' : 'hidden'}`}>
-                  <FileExplorer
-                    projectRules={projectRules}
-                    plan={plan}
-                    phaseCount={phaseCount}
-                    phases={phases}
-                    prd={prd}
-                    projectStructure={projectStructure}
-                    uiUX={uiUX}
-                    streamingUpdates={streamingUpdates}
-                    isGenerating={isStreamingDocs}
-                    downloadButtonRef={downloadButtonRef}
-                  />
+                  <FileExplorer />
                 </div>
               </div>
             </div>
@@ -1902,18 +1577,12 @@ const DevPage = () => {
               <ChatMessageList
                 messages={messages}
                 isLoading={isLoading}
-                isGeneratingDocs={isGeneratingDocs}
                 isArchitectureLoading={isArchitectureLoading}
                 architectureData={architectureData}
-                docsGenerated={docsGenerated}
-                isStreamingDocs={isStreamingDocs}
-                isMobile={isMobile}
                 showOptionsButton={showOptionsButton}
                 isOptionsLoading={archOptionsLoading}
                 userInitial={user?.firstName?.charAt(0) || user?.emailAddresses?.[0]?.emailAddress.charAt(0) || "U"}
-                onGenerateDocs={handleGenerateDocs}
                 onViewOptions={handleViewOptions}
-                docsButtonRef={docsButtonRef}
                 messagesEndRef={messagesEndRef}
                 onInterviewComplete={handleInterviewComplete}
               />
@@ -1975,8 +1644,7 @@ const DevPage = () => {
                     className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'context'
                       ? 'text-white bg-gray-700/50'
                       : 'text-gray-400'
-                      } ${(!docsGenerated && !isStreamingDocs && !isGeneratingDocs) ? 'opacity-50' : ''}`}
-                    disabled={!docsGenerated && !isStreamingDocs && !isGeneratingDocs}
+                      }`}
                   >
                     Docs
                   </button>
@@ -2035,10 +1703,9 @@ const DevPage = () => {
                     className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'context'
                       ? 'text-white bg-gray-700/50'
                       : 'text-gray-400'
-                      } ${(!docsGenerated && !isStreamingDocs && !isGeneratingDocs) ? 'opacity-50' : ''}`}
-                    disabled={!docsGenerated && !isStreamingDocs && !isGeneratingDocs}
+                      }`}
                   >
-                    Contextual Docs
+                    Docs
                   </button>
                 </div>
 
@@ -2127,18 +1794,7 @@ const DevPage = () => {
                 </div>
 
                 <div className={`h-full ${activeTab === 'context' ? 'block' : 'hidden'}`}>
-                  <FileExplorer
-                    projectRules={projectRules}
-                    plan={plan}
-                    phaseCount={phaseCount}
-                    phases={phases}
-                    prd={prd}
-                    projectStructure={projectStructure}
-                    uiUX={uiUX}
-                    streamingUpdates={streamingUpdates}
-                    isGenerating={isStreamingDocs}
-                    downloadButtonRef={downloadButtonRef}
-                  />
+                  <FileExplorer />
                 </div>
               </div>
             </div>
@@ -2193,8 +1849,8 @@ const DevPage = () => {
                   <div className="flex items-start space-x-4">
                     <div className="flex-shrink-0 w-8 h-8 bg-blue-500/20 rounded-full flex items-center justify-center text-blue-400 font-bold text-sm">3</div>
                     <div>
-                      <h4 className="font-semibold text-white mb-2">Generate Documentation</h4>
-                      <p className="text-gray-300">Click "Generate Docs" to create comprehensive project documentation, including PRD, project structure, and implementation phases.</p>
+                      <h4 className="font-semibold text-white mb-2">Open Docs</h4>
+                      <p className="text-gray-300">Use the Docs tab to view the mock PRD context while you continue planning your architecture and implementation.</p>
                     </div>
                   </div>
 
@@ -2339,35 +1995,6 @@ const DevPage = () => {
           }
         }
       `}</style>
-
-      {/* Coach Mark for Generate Docs Button */}
-      {!isMobile && (<CoachMark
-        isVisible={showDocsCoachMark}
-        targetElement={docsButtonRef.current}
-        title="For Context Engineering"
-        message="Click this button to generate your docs for context engineering"
-        position="right"
-        onNext={() => setShowDocsCoachMark(false)}
-        onSkip={() => setShowDocsCoachMark(false)}
-        onClose={() => setShowDocsCoachMark(false)}
-        nextLabel="Got it"
-        showSkip={false}
-      />)}
-
-
-      {/* Coach Mark for Download Button */}
-      <CoachMark
-        isVisible={showDownloadCoachMark}
-        targetElement={downloadButtonRef.current}
-        title="Download the Docs"
-        message="Just download these docs and copy-paste these into your new project's root folder. Then tell your coding assistant to read PROJECT_RULES.md and start building"
-        position="left"
-        onNext={() => setShowDownloadCoachMark(false)}
-        onSkip={() => setShowDownloadCoachMark(false)}
-        onClose={() => setShowDownloadCoachMark(false)}
-        nextLabel="Got it"
-        showSkip={false}
-      />
 
       {/* Character Limit Pricing Dialog */}
       <PricingDialog
