@@ -60,12 +60,45 @@ Never place two components at the exact same x,y coordinates.
 </position_guide>
 
 <output_rules>
+<architecture>
 - technologies.primary: the actual primary technology used (e.g. "React", "Unity (C#)", "PostgreSQL")
 - technologies.framework: the main framework or library (e.g. "Next.js", "Express", "Npgsql") — empty string if none
 - technologies.additional: supporting tools, max one short sentence
 - purpose: 2-4 sentences max. What it does and why it exists in THIS architecture specifically.
 - dataFlow.sends / receives: 2–4 items max, specific to this project, no generic filler
 - architectureRationale: 2 sentences. Why this specific set of components and their arrangement makes sense for this project.
+</architecture>
+<prd>
+- prd: A full product requirements document in markdown format. Structure it exactly as follows:
+
+  # [Project Title]
+
+  ## Product Overview
+  One paragraph describing what the software is and what it does.
+
+  ## Problem Statement
+  What problem does this solve? Who has this problem?
+
+  ## Goals
+  3-5 bullet points of what this project aims to achieve.
+
+  ## Core Features
+  Numbered list of the main features, derived from the requirement. Be specific to this project.
+
+  ## Architecture Overview
+  2-3 sentences describing how the components fit together at a high level. Reference the actual components by name.
+
+  ## Success Metrics
+  3-5 measurable outcomes that define success for this project.
+
+  ## Milestones
+  4-6 logical build phases in order, from MVP to full product.
+
+  ## Out of Scope
+  3-5 things explicitly NOT included in this architecture or this phase.
+
+  Keep the tone technical but readable. Be specific to the actual project — no generic filler. Every section should feel like it was written for THIS project specifically.
+</prd>
 </output_rules>
 
 <examples_of_good_vs_bad>
@@ -88,5 +121,5 @@ GOOD:
 → CLI tool with: CLI Entry Point, Core Engine, File System / Config
 </examples_of_good_vs_bad>
 
-Now analyze the project input and generate the architecture JSON. Think carefully about what this project actually needs before deciding on components. Start from the user-facing entry point, trace through the system to data persistence, and include only what is genuinely required.
-`;
+Now analyze the project input and generate the architecture JSON. Think carefully about what this project actually needs before deciding on components. Start from the user-facing entry point, trace through the system to data persistence, and include only what is genuinely required. Also include a "prd" field with two short paragraphs per the output rules.
+`

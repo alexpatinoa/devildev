@@ -124,6 +124,21 @@ const architectureJsonSchema = {
   required: ["components", "connectionLabels", "architectureRationale"]
 };
 
+// JSON Schema for main architecture output (includes PRD)
+const architectureJsonSchemaWithPrd = {
+  type: "object",
+  description: "Complete software architecture with components, connections, rationale, and PRD",
+  properties: {
+    components: architectureJsonSchema.properties.components,
+    connectionLabels: architectureJsonSchema.properties.connectionLabels,
+    architectureRationale: architectureJsonSchema.properties.architectureRationale,
+    prd: {
+      type: "string",
+      description: "Product requirements document in markdown format. Keep the tone technical but readable. Be specific to the actual project — no generic filler. Every section should feel like it was written for THIS project specifically."
+    }
+  },
+  required: ["components", "connectionLabels", "architectureRationale", "prd"]
+};
 
 export async function generateArchitectureWithToolCalling(requirement: string, conversationHistory: any[] = [], architectureData: any, userId: string | null = null) {
   // Format conversation history for the prompt
@@ -422,7 +437,7 @@ export async function generateMainArchitecture({
 
     const prompt = PromptTemplate.fromTemplate(ARCHITECTURE_GENERATION_PROMPT);
 
-    const structuredLlm = llm.withStructuredOutput(architectureJsonSchema);
+    const structuredLlm = llm.withStructuredOutput(architectureJsonSchemaWithPrd);
     const chain = prompt.pipe(structuredLlm);
 
     const generatedArchitecture = await chain.invoke(
@@ -435,18 +450,24 @@ export async function generateMainArchitecture({
       { callbacks: [tokenUsageHandler] }
     );
 
-    // Store in DB
-    const newArchitecture = await db.architecture.create({
-      data: {
-        chatId,
-        stackId,
-        requirement,
-        architectureRationale: generatedArchitecture.architectureRationale,
-        components: generatedArchitecture.components,
-        connectionLabels: generatedArchitecture.connectionLabels || {},
-        componentPositions: {},
-      }
-    });
+    // Store in DB + persist PRD to Stack
+    const [newArchitecture] = await db.$transaction([
+      db.architecture.create({
+        data: {
+          chatId,
+          stackId,
+          requirement,
+          architectureRationale: generatedArchitecture.architectureRationale,
+          components: generatedArchitecture.components,
+          connectionLabels: generatedArchitecture.connectionLabels || {},
+          componentPositions: {},
+        }
+      }),
+      db.stack.update({
+        where: { id: stackId },
+        data: { prd: generatedArchitecture.prd }
+      })
+    ]);
 
     // Deduct credits
     const usage = tokenUsageHandler.getUsage();
@@ -460,6 +481,7 @@ export async function generateMainArchitecture({
     return {
       success: true,
       architecture: newArchitecture,
+      prd: generatedArchitecture.prd,
       creditsRemaining: creditResult.remaining
     };
 

@@ -90,6 +90,7 @@ model Stack {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   architecture Architecture[] @relation("StackArchitectures")
+  prd String?
   archOptions  ArchOptions[]
 }
 
