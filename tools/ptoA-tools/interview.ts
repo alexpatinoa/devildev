@@ -17,9 +17,9 @@ const InterviewQuestionSchema = z.object({
   options: z
     .array(z.string())
     .min(2)
-    .max(4)
+    .max(7)
     .describe(
-      "The available choices (2-4). Distinct, mutually exclusive unless multiselect. No 'Other' option; it will be provided automatically."
+      "The available choices (2-7). Distinct, mutually exclusive unless multiselect. No 'Other' option; it will be provided automatically."
     ),
   multiselect: z
     .boolean()
@@ -31,8 +31,10 @@ const InterviewQuestionSchema = z.object({
 const InterviewInputSchema = z.object({
   questions: z
     .array(InterviewQuestionSchema)
+    .min(1)
+    .max(7)
     .describe(
-      "Structured questions to gather user input. Keep questions brief and provide context in the description field."
+      "2-7 structured, non-generic questions tailored to this user. Each question should reveal intent, priorities, constraints, or success criteria. Keep questions brief and provide context in the description field."
     ),
 });
 
@@ -40,7 +42,7 @@ const InterviewInputSchema = z.object({
 export const interviewTool = new DynamicStructuredTool({
   name: "interview_user",
   description:
-    "Use this tool to ask the user for clarification or input on key design decisions. Provide 1-4 structured questions with 2-4 options each. Use when you need more information about the user's query of what exactly he meant or what exactly he wants to build.",
+    "Use this tool to ask the user for clarification or input on key design decisions. Provide 2-7 structured questions with 2-4 options each. Questions must be specific to the user's context and designed to uncover what they truly want (goals, constraints, tradeoffs, non-goals). Use when you need more information about the user's query of what exactly he meant or what exactly he wants to build.",
   schema: InterviewInputSchema,
   func: async (input): Promise<string> => {
     return JSON.stringify(input);
