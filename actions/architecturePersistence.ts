@@ -95,7 +95,7 @@ export async function saveArchitecture(input: ArchitectureInput) {
     console.error("Error saving architecture:", error);
     return { success: false, error: "Failed to save architecture" };
   }
-} 
+}
 
 export async function saveArchitectureWithUserId(architectureId: string, input: ArchitectureInput, userId: string) {
   try {
@@ -112,7 +112,7 @@ export async function saveArchitectureWithUserId(architectureId: string, input: 
     }
 
     // Extract component positions from architecture data if not provided separately
-    const componentPositions = input.componentPositions || 
+    const componentPositions = input.componentPositions ||
       input.architectureData.components.reduce((acc, component) => {
         acc[component.id] = component.position;
         return acc;
@@ -141,7 +141,7 @@ export async function saveArchitectureWithUserId(architectureId: string, input: 
     console.error("Error saving architecture:", error);
     return { success: false, error: "Failed to save architecture" };
   }
-} 
+}
 
 // Get all architectures for a chat
 export async function getArchitecture(chatId: string) {
@@ -149,7 +149,7 @@ export async function getArchitecture(chatId: string) {
   ;
   try {
     const { userId } = await auth();
-    
+
     if (!userId) {
       throw new Error("User not authenticated");
     }
@@ -201,6 +201,7 @@ export async function getArchitecture(chatId: string) {
           lastPositionUpdate: arch.lastPositionUpdate,
           createdAt: arch.createdAt,
           updatedAt: arch.updatedAt,
+          stackId: arch.stackId,
         }
       };
     });
@@ -208,7 +209,7 @@ export async function getArchitecture(chatId: string) {
     // Return all architectures with the latest one for backward compatibility
     const latestArchitecture = architectures[architectures.length - 1];
 
-    return { 
+    return {
       success: true,
       architectures, // All architectures
       count: architectures.length, // Total count
@@ -224,12 +225,12 @@ export async function getArchitecture(chatId: string) {
 
 // Update only component positions (for performance during dragging)
 export async function updateComponentPositions(
-  chatId: string, 
+  chatId: string,
   positions: Record<string, ComponentPosition>
 ) {
   try {
     const { userId } = await auth();
-    
+
     if (!userId) {
       throw new Error("User not authenticated");
     }
@@ -302,7 +303,7 @@ export async function updateComponentPositionsDebounced(
 export async function checkArchitectureById(architectureId: string) {
   try {
     const { userId } = await auth();
-    
+
     if (!userId) {
       throw new Error("User not authenticated");
     }
@@ -325,7 +326,7 @@ export async function checkArchitectureById(architectureId: string) {
     }
 
     // Parse the JSON data and reconstruct the architecture object
-    const architectureData: ArchitectureData = { 
+    const architectureData: ArchitectureData = {
       components: architecture.components as unknown as ComponentData[],
       connectionLabels: architecture.connectionLabels as Record<string, string> || {},
       architectureRationale: architecture.architectureRationale || undefined,
@@ -335,8 +336,8 @@ export async function checkArchitectureById(architectureId: string) {
 
     const componentPositions = architecture.componentPositions as unknown as Record<string, ComponentPosition> || {};
 
-    return { 
-      success: true, 
+    return {
+      success: true,
       exists: true,
       architecture: architectureData,
       componentPositions,
@@ -347,6 +348,7 @@ export async function checkArchitectureById(architectureId: string) {
         lastPositionUpdate: architecture.lastPositionUpdate,
         createdAt: architecture.createdAt,
         updatedAt: architecture.updatedAt,
+        stackId: architecture.stackId,
       }
     };
   } catch (error) {

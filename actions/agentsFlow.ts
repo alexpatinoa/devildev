@@ -1,7 +1,7 @@
 "use server";
 import { ChatOpenAI } from "@langchain/openai";
 import { ChatPromptTemplate, MessagesPlaceholder, PromptTemplate } from "@langchain/core/prompts";
-import { architectureModificationPrompt, BASE_DEVILDEV_AGENT_PROMPT, DevilDevAgentAfterInterviewRole, DevilDevAgentBeforeInterviewRole } from "../prompts/Chatbot";
+import { architectureModificationPrompt, BASE_DEVILDEV_AGENT_PROMPT, DevilDevAgentAfterInterviewRole, DevilDevAgentBeforeInterviewRole } from "../prompts/dev/Chatbot";
 import { deductCredits, getCredits } from "./credits";
 import { minSoulsToSendMessage } from "../Limits";
 import { extractTextContent } from "@/lib/ai/extractTextContent";
@@ -25,8 +25,6 @@ const llm = new ChatOpenAI({
   openAIApiKey: openaiKey,
   model: "gpt-5-nano-2025-08-07" 
 })
-
-
 
 export async function chatbot(userInput: string, conversationHistory: any[] = [], userId: string | null = null, isInterviewed: boolean = false) {
     // Check credits before running the agent

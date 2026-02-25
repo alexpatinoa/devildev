@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
-import {HelpCircle, Maximize, X, Menu, MessageCircle, Users, Phone, Plus, Loader2, MessageSquare, BrainCircuit, ChevronDown } from 'lucide-react';
+import { HelpCircle, Maximize, X, Menu, MessageCircle, Users, Phone, Plus, Loader2, MessageSquare, BrainCircuit, ChevronDown } from 'lucide-react';
 import Architecture from '@/components/core/architecture';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import SoulCount from '../../../components/core/SoulCount';
@@ -11,15 +11,15 @@ import { chatbot, architectureModificationBot } from '../../../../actions/agents
 import { TerminatingTools, GeneralResponsePayload, InterviewPayload, Tier1Payload, Tier2Payload, type InterviewAnswer, type InterviewQuestion } from '../../../../types/pToA/tools';
 import { submitFeedback } from '../../../../actions/feedback';
 import { notifyCreditsUpdate, refetchCredits } from '@/lib/credits-events';
-import { triggerArchitectureGeneration } from '../../../../actions/architecture'; 
+import { generateMainArchitecture, triggerArchitectureGeneration } from '../../../../actions/architecture';
 import { getChat, addMessageToChat, updateChatMessages, createChatWithId, ChatMessage as ChatMessageType, getUserChats } from '../../../../actions/chat';
 import { createArchOptionsFromTier2, getArchOptionsHistory } from '../../../../actions/archOptions';
 import {
-  getArchitecture, 
+  getArchitecture,
   updateComponentPositionsDebounced,
   checkArchitectureById,
   ArchitectureData,
-  ComponentPosition 
+  ComponentPosition
 } from '../../../../actions/architecturePersistence';
 import {
   saveContextualDocs,
@@ -61,6 +61,7 @@ interface ArchitectureVersion {
     lastPositionUpdate: Date;
     createdAt: Date;
     updatedAt: Date;
+    stackId?: string | null;
   };
 }
 
@@ -98,7 +99,7 @@ const toRomanNumeral = (num: number): string => {
     [4, 'IV'],
     [1, 'I']
   ];
-  
+
   let result = '';
   for (const [value, numeral] of romanNumerals) {
     while (num >= value) {
@@ -114,14 +115,14 @@ const sanitizeJsonString = (jsonString: string): string => {
   // Remove markdown code blocks first
   let cleaned = jsonString
     .replace(/^```json\s*/i, '')
-    .replace(/^```\s*/, '') 
+    .replace(/^```\s*/, '')
     .replace(/\s*```\s*$/, '')
     .trim();
-  
+
   // Remove or escape control characters (except \n, \r, \t which are valid in JSON strings)
   // Control characters are characters with ASCII codes 0-31 except for \n (10), \r (13), \t (9)
   cleaned = cleaned.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
-  
+
   return cleaned;
 };
 
@@ -131,7 +132,7 @@ const safeJsonParse = (jsonString: string | any): any => {
   if (typeof jsonString !== 'string') {
     return jsonString;
   }
-  
+
   try {
     // First, try to sanitize and parse
     const sanitized = sanitizeJsonString(jsonString);
@@ -139,7 +140,7 @@ const safeJsonParse = (jsonString: string | any): any => {
   } catch (error) {
     console.error('JSON parse error:', error);
     console.error('Problematic JSON string:', jsonString.substring(0, 500));
-    
+
     // Try to extract JSON from the string if it's embedded in text
     const jsonMatch = jsonString.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
@@ -150,7 +151,7 @@ const safeJsonParse = (jsonString: string | any): any => {
         console.error('Retry parse also failed:', retryError);
       }
     }
-    
+
     // If all parsing fails, throw the error
     throw error;
   }
@@ -196,7 +197,7 @@ function formatInterviewAnswersForApi(questions: InterviewQuestion[], answers: I
 const DevPage = () => {
   const params = useParams();
   const chatId = params?.devId as string;
-  
+
   const [inputMessage, setInputMessage] = useState('');
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [textareaHeight, setTextareaHeight] = useState('60px');
@@ -211,6 +212,7 @@ const DevPage = () => {
   const [architectureData, setArchitectureData] = useState<ArchitectureData | null>(null);
   const [isArchitectureLoading, setIsArchitectureLoading] = useState(false);
   const [architectureGenerated, setArchitectureGenerated] = useState(false);
+  const [isGeneratingMainArch, setIsGeneratingMainArch] = useState(false);
   const [archOptionsHistory, setArchOptionsHistory] = useState<ArchOptionsData[]>([]);
   const [selectedArchOptionsId, setSelectedArchOptionsId] = useState<string | null>(null);
   const [archOptionsLoading, setArchOptionsLoading] = useState(false);
@@ -222,10 +224,16 @@ const DevPage = () => {
   const [allArchitectures, setAllArchitectures] = useState<ArchitectureVersion[]>([]);
   const [selectedVersionIndex, setSelectedVersionIndex] = useState<number>(0);
   const [isVersionDropdownOpen, setIsVersionDropdownOpen] = useState(false);
+
+  // Derived state for stack IDs that already have architectures generated
+  const generatedStackIds = React.useMemo(() => {
+    return allArchitectures.map(arch => arch.metadata?.stackId).filter(Boolean) as string[];
+  }, [allArchitectures]);
+
   // Contextual docs state
   const [contextualDocs, setContextualDocs] = useState<ContextualDocsData>({});
   const [docsGenerated, setDocsGenerated] = useState(false);
-  
+
   // Individual doc states for backward compatibility with existing components
   const [projectRules, setProjectRules] = useState<string>("");
   const [plan, setPlan] = useState<string>("");
@@ -234,40 +242,40 @@ const DevPage = () => {
   const [phases, setPhase] = useState<string[]>([]);
   const [projectStructure, setProjectStructure] = useState<string>("");
   const [uiUX, setUiUX] = useState<string>("");
-  
+
   // New streaming state
-  const [streamingUpdates, setStreamingUpdates] = useState<Array<{fileName: string, content: string, isComplete: boolean}>>([]);
+  const [streamingUpdates, setStreamingUpdates] = useState<Array<{ fileName: string, content: string, isComplete: boolean }>>([]);
   const [isStreamingDocs, setIsStreamingDocs] = useState(false);
-  
+
   // Component position persistence
   const [componentPositions, setComponentPositions] = useState<Record<string, ComponentPosition>>({});
-  
+
   // Panel resize state
   const [leftPanelWidth, setLeftPanelWidth] = useState(30); // 30% default
   const [isResizing, setIsResizing] = useState(false);
   const [startX, setStartX] = useState(0);
   const [startLeftWidth, setStartLeftWidth] = useState(30);
-  
-  
+
+
   // New sidebar state for dev page
   const [isDevSidebarHovered, setIsDevSidebarHovered] = useState(false);
   const [userChats, setUserChats] = useState<UserChat[]>([]);
   const [chatsLoading, setChatsLoading] = useState(false);
-  
+
   // Feedback dialog state
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  
+
   // How to dialog state
   const [isHowToOpen, setIsHowToOpen] = useState(false);
 
   // Character limit state
   const [showCharacterLimitDialog, setShowCharacterLimitDialog] = useState(false);
   const [showLowSoulsDialog, setShowLowSoulsDialog] = useState(false);
-  
-  
+
+
   // Coach mark state
   const [showDocsCoachMark, setShowDocsCoachMark] = useState(false);
   const [showDownloadCoachMark, setShowDownloadCoachMark] = useState(false);
@@ -275,11 +283,11 @@ const DevPage = () => {
   const { userSubscription, isLoadingUserSubscription, isErrorUserSubscription } = useUserSubscription();
   const docsButtonRef = useRef<HTMLButtonElement>(null);
   const downloadButtonRef = useRef<HTMLButtonElement>(null);
-  
+
   // Mobile responsive state
   const [isMobilePanelOpen, setIsMobilePanelOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  
+
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const selectedArchOptions = React.useMemo(
@@ -296,14 +304,14 @@ const DevPage = () => {
   useEffect(() => {
     const handleMouseMove = (e: globalThis.MouseEvent) => {
       setMousePosition({ x: e.clientX, y: e.clientY });
-      
+
       // Handle panel resizing
       if (isResizing && containerRef.current) {
         const containerRect = containerRef.current.getBoundingClientRect();
         const newX = e.clientX - containerRect.left;
         const containerWidth = containerRect.width;
         const newLeftWidth = (newX / containerWidth) * 100;
-        
+
         // Constrain between 20% and 80%
         const constrainedWidth = Math.min(80, Math.max(20, newLeftWidth));
         setLeftPanelWidth(constrainedWidth);
@@ -316,7 +324,7 @@ const DevPage = () => {
 
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handleMouseUp);
-    
+
     return () => {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
@@ -332,10 +340,10 @@ const DevPage = () => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
     };
-    
+
     checkMobile();
     window.addEventListener('resize', checkMobile);
-    
+
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
@@ -346,7 +354,7 @@ const DevPage = () => {
     } else {
       document.body.classList.remove('mobile-panel-open');
     }
-    
+
     return () => {
       document.body.classList.remove('mobile-panel-open');
     };
@@ -384,7 +392,7 @@ const DevPage = () => {
   // Handle component position changes with persistence
   const handlePositionChange = async (positions: Record<string, ComponentPosition>) => {
     setComponentPositions(positions);
-    
+
     // Save to database with debouncing
     if (chatId && architectureGenerated) {
       await updateComponentPositionsDebounced(chatId, positions);
@@ -405,13 +413,13 @@ const DevPage = () => {
   // Helper function to save contextual docs
   const saveDocsData = async (docsData: ContextualDocsData) => {
     if (!chatId) return;
-    
+
     try {
       const result = await saveContextualDocs({
         chatId,
         docsData,
       });
-      
+
       if (result.success) {
         setContextualDocs(docsData);
         syncIndividualStates(docsData);
@@ -447,19 +455,19 @@ const DevPage = () => {
   // Load chat data and architecture when component mounts
   useEffect(() => {
     const loadChatAndArchitecture = async () => {
- 
-      if (!chatId || !isSignedIn) return; 
-      
-      
+
+      if (!chatId || !isSignedIn) return;
+
+
       try {
         // Check if this is a new chat from localStorage
         const isNewChat = localStorage.getItem('isNewChat');
-        if(isNewChat){
+        if (isNewChat) {
           setIsNewChat(true);
         }
         const newChatId = localStorage.getItem('newChatId');
         const firstMessage = localStorage.getItem('firstMessage');
-        
+
         if (isNewChat && firstMessage) {
           // This is a new chat - create it and process the first message
 
@@ -471,25 +479,25 @@ const DevPage = () => {
             content: firstMessage,
             timestamp: new Date().toISOString()
           };
-          
-          setMessages([userMessage]); 
+
+          setMessages([userMessage]);
 
           processInitialMessage(firstMessage, [userMessage]);
-          
+
           const createResult = await createChatWithId(chatId, firstMessage);
-            if (!createResult.success) {
-              console.error("Failed to create chat:", createResult.error);
-              localStorage.removeItem('newChatId');
-              localStorage.removeItem('firstMessage');
-              localStorage.removeItem('isNewChat');
-              return;
-            }
-            
-            // Clear localStorage
+          if (!createResult.success) {
+            console.error("Failed to create chat:", createResult.error);
             localStorage.removeItem('newChatId');
             localStorage.removeItem('firstMessage');
             localStorage.removeItem('isNewChat');
-            
+            return;
+          }
+
+          // Clear localStorage
+          localStorage.removeItem('newChatId');
+          localStorage.removeItem('firstMessage');
+          localStorage.removeItem('isNewChat');
+
         } else {
 
           setIsLoadingChat(true);
@@ -498,14 +506,14 @@ const DevPage = () => {
           if (chatResult.success && chatResult.chat) {
             const chatMessages = chatResult.chat.messages as unknown as ChatMessageType[];
             setMessages(chatMessages);
-            setIsChatMode(true); 
+            setIsChatMode(true);
 
             // Load architecture data if it exists 
             const archResult = await getArchitecture(chatId);
             if (archResult.success && archResult.architectures && archResult.architectures.length > 0) {
               // Set all architectures
               setAllArchitectures(archResult.architectures);
-              
+
               // Set the latest architecture as default
               const latestIndex = archResult.architectures.length - 1;
               setSelectedVersionIndex(latestIndex);
@@ -536,9 +544,9 @@ const DevPage = () => {
             // Clear any stale localStorage data
             localStorage.removeItem('newChatId');
             localStorage.removeItem('firstMessage');
-            router.push('/'); 
+            router.push('/');
           }
-        } 
+        }
       } catch (error) {
         console.error("Error loading chat:", error);
         // Clear any stale localStorage data
@@ -568,7 +576,7 @@ const DevPage = () => {
   // Function to fetch user's chats
   const fetchUserChats = async () => {
     if (!isSignedIn) return;
-    
+
     setChatsLoading(true);
     try {
       const result = await getUserChats(10); // Get last 10 chats
@@ -592,20 +600,20 @@ const DevPage = () => {
   // Function to handle feedback submission
   const handleFeedbackSubmit = async () => {
     if (!feedbackText.trim() || isSubmittingFeedback) return;
-    
+
     setIsSubmittingFeedback(true);
     setFeedbackMessage(null);
-    
+
     try {
       const result = await submitFeedback("dev/" + chatId, feedbackText);
-      
+
       if (result.success) {
         setFeedbackMessage({
           type: 'success',
           text: 'Thank you for your feedback! We appreciate your input.'
         });
-        setFeedbackText(''); 
-        
+        setFeedbackText('');
+
         // Close dialog after a short delay to show success message
         setTimeout(() => {
           setIsFeedbackOpen(false);
@@ -640,7 +648,7 @@ const DevPage = () => {
   useEffect(() => {
     // Check if docs button should be visible and scroll to it
     const shouldShowDocsButton = !isLoading && !isArchitectureLoading && !isGeneratingDocs && architectureData;
-    
+
     if (shouldShowDocsButton && docsButtonRef.current) {
       // Small delay to ensure the button is rendered
       const timer = setTimeout(() => {
@@ -681,20 +689,80 @@ const DevPage = () => {
     }
   }, [docsGenerated, isStreamingDocs]);
 
-  // Function to generate architecture
-  const genArchitecture = async (requirement: string, conversationHistory: any[] = []) => {
-    
-    setIsArchitectureLoading(true);
-    setDocsGenerated(false);
+  const handleStackGenerate = async (stackOption: StackData) => {
+    if (!chatId || !user?.id || !selectedArchOptions) return;
 
-    if(isMobile){
+    setIsGeneratingMainArch(true);
+    setIsArchitectureLoading(true);
+    setActiveTab('architecture');
+
+    if (isMobile) {
       setIsMobilePanelOpen(true);
     }
 
     try {
-      if(user?.id){
+      const result = await generateMainArchitecture({
+        requirement: selectedArchOptions.requirement || "",
+        title: stackOption.name,
+        technology: stackOption.technology,
+        description: stackOption.description,
+        chatId: chatId,
+        stackId: stackOption.id,
+        userId: user.id
+      });
+
+      if (result.success && result.architecture) {
+        if (result.creditsRemaining !== undefined) {
+          notifyCreditsUpdate(result.creditsRemaining);
+        }
+
+        const archResult = await getArchitecture(chatId);
+        if (archResult.success && archResult.architectures && archResult.architectures.length > 0) {
+          setAllArchitectures(archResult.architectures);
+          const latestIndex = archResult.architectures.length - 1;
+          setSelectedVersionIndex(latestIndex);
+          setArchitectureData(archResult.architectures[latestIndex].architecture);
+          setComponentPositions(archResult.architectures[latestIndex].componentPositions || {});
+        } else {
+          setArchitectureData(result.architecture as unknown as ArchitectureData);
+          setComponentPositions(
+            (result.architecture.componentPositions as unknown as Record<string, ComponentPosition>) || {}
+          );
+        }
+        setArchitectureGenerated(true);
+      } else if (result.error === 'INSUFFICIENT_CREDITS') {
+        if (result.remainingCredits !== undefined) {
+          notifyCreditsUpdate(result.remainingCredits);
+        }
+        setShowLowSoulsDialog(true);
+        setActiveTab('stacks');
+      } else {
+        console.error("Failed to generate main architecture:", result.error);
+        setActiveTab('stacks');
+      }
+    } catch (error) {
+      console.error("Error generating main architecture:", error);
+      setActiveTab('stacks');
+    } finally {
+      setIsGeneratingMainArch(false);
+      setIsArchitectureLoading(false);
+    }
+  };
+
+  // Function to generate architecture
+  const genArchitecture = async (requirement: string, conversationHistory: any[] = []) => {
+
+    setIsArchitectureLoading(true);
+    setDocsGenerated(false);
+
+    if (isMobile) {
+      setIsMobilePanelOpen(true);
+    }
+
+    try {
+      if (user?.id) {
         const generationId = crypto.randomUUID();
-        
+
         const result = await triggerArchitectureGeneration({
           generationId,
           requirement,
@@ -742,15 +810,15 @@ const DevPage = () => {
         const currentInterval = isInitialPhase ? initialPollInterval : finalPollInterval;
 
         const result = await checkArchitectureById(generationId);
-        
+
         if (result.success && result.exists && result.architecture) {
           // Architecture found! Update the state
-          
+
           // Reload all architectures to get the updated list
           const archResult = await getArchitecture(chatId);
           if (archResult.success && archResult.architectures && archResult.architectures.length > 0) {
             setAllArchitectures(archResult.architectures);
-            
+
             // Set the latest architecture as the selected one
             const latestIndex = archResult.architectures.length - 1;
             setSelectedVersionIndex(latestIndex);
@@ -761,27 +829,27 @@ const DevPage = () => {
             setArchitectureData(result.architecture);
             setComponentPositions(result.componentPositions || {});
           }
-          
+
           setArchitectureGenerated(true);
           setIsArchitectureLoading(false);
-          
+
           // Refetch credits after background job completes
           if (user?.id) {
             await refetchCredits(user.id);
           }
-          
+
           return;
         }
-        
+
         if (attempts >= maxAttempts) {
           console.error("Polling timeout: Architecture not found after maximum attempts");
           setIsArchitectureLoading(false);
           return;
         }
-        
+
         // Continue polling with appropriate interval
         setTimeout(poll, currentInterval);
-        
+
       } catch (error) {
         console.error("Error polling for architecture:", error);
         setIsArchitectureLoading(false);
@@ -956,8 +1024,8 @@ const DevPage = () => {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    if(isLoadingUserSubscription) return;
-    e.preventDefault(); 
+    if (isLoadingUserSubscription) return;
+    e.preventDefault();
     if (!inputMessage.trim() || isLoading) return;
 
     // Check character limit before processing
@@ -979,16 +1047,16 @@ const DevPage = () => {
     setMessages(updatedMessagesWithUser);
     setIsChatMode(true);
     setIsLoading(true);
-    
+
     const currentInput = inputMessage;
     setInputMessage('');
     setTextareaHeight('60px');
 
-    if(architectureData){
+    if (architectureData) {
       setIsArchitectureGeneratedOnce(true);
       try {
         const result = await architectureModificationBot(currentInput, messages, architectureData, user?.id ?? null);
-        
+
         // Handle insufficient credits
         if (typeof result === 'object' && result.error === 'INSUFFICIENT_CREDITS') {
           if (result.remainingCredits !== undefined) {
@@ -1007,17 +1075,17 @@ const DevPage = () => {
           await updateChatMessages(chatId, updatedMessages);
           return;
         }
-        
+
         // Notify credits update if available
         if (typeof result === 'object' && result.remainingCredits !== undefined) {
           notifyCreditsUpdate(result.remainingCredits);
         }
-        
+
         const chatbotResponse = typeof result === 'string' ? result : result.textContent;
-        const parsedClassifier = safeJsonParse(chatbotResponse); 
- 
+        const parsedClassifier = safeJsonParse(chatbotResponse);
+
         setCurrentStartOrNot(parsedClassifier.is_change);
-        if(parsedClassifier.is_change){
+        if (parsedClassifier.is_change) {
           const assistantMessage: ChatMessageType = {
             id: Date.now().toString(),
             type: 'assistant',
@@ -1025,11 +1093,11 @@ const DevPage = () => {
             timestamp: new Date().toISOString()
           };
           const updatedMessages = [...updatedMessagesWithUser, assistantMessage];
-          setMessages(updatedMessages); 
+          setMessages(updatedMessages);
           setIsLoading(false);
           await genArchitecture(currentInput, messages);
           await updateChatMessages(chatId, updatedMessages);
-        }else{
+        } else {
           const assistantMessage: ChatMessageType = {
             id: Date.now().toString(),
             type: 'assistant',
@@ -1037,8 +1105,8 @@ const DevPage = () => {
             timestamp: new Date().toISOString()
           };
           const updatedMessages = [...updatedMessagesWithUser, assistantMessage];
-          setMessages(updatedMessages); 
-          setIsLoading(false); 
+          setMessages(updatedMessages);
+          setIsLoading(false);
           await updateChatMessages(chatId, updatedMessages);
         }
       } catch (error) {
@@ -1078,13 +1146,13 @@ const DevPage = () => {
       });
     }
 
-    
+
 
 
   };
 
   const handleGenerateDocs = async () => {
-    setIsGeneratingDocs(true); 
+    setIsGeneratingDocs(true);
     // setIsLoading(true);
     setActiveTab('context');
     setIsStreamingDocs(true);
@@ -1117,42 +1185,42 @@ const DevPage = () => {
       try {
         while (true) {
           const { done, value } = await reader.read();
-          
+
           if (done) break;
 
           // Add new chunk to buffer
           buffer += decoder.decode(value, { stream: true });
-          
+
           // Process complete messages from buffer
           const messages = buffer.split('\n\n');
-          
+
           // Keep the last incomplete message in buffer
           buffer = messages.pop() || '';
 
           for (const message of messages) {
             if (message.trim()) {
               const lines = message.split('\n');
-              
+
               for (const line of lines) {
                 if (line.startsWith('data: ') && line.length > 6) {
                   const jsonStr = line.slice(6).trim();
-                  
+
                   try {
                     if (jsonStr) {
                       // Log for debugging
-                      
+
                       const data = JSON.parse(jsonStr);
-                      
+
                       if (data.type === 'update') {
                         // Handle streaming update
                         setStreamingUpdates(prev => {
                           const existingIndex = prev.findIndex(update => update.fileName === data.fileName);
-                          const newUpdate = { 
-                            fileName: data.fileName, 
-                            content: data.content, 
-                            isComplete: data.isComplete 
+                          const newUpdate = {
+                            fileName: data.fileName,
+                            content: data.content,
+                            isComplete: data.isComplete
                           };
-                          
+
                           if (existingIndex >= 0) {
                             const updated = [...prev];
                             updated[existingIndex] = newUpdate;
@@ -1171,7 +1239,7 @@ const DevPage = () => {
                         setProjectStructure(result.projectStructure);
                         setUiUX(result.uiUX);
                         setProjectRules(result.projectRules);
-                        
+
                         // Save all docs to database
                         const docsData: ContextualDocsData = {
                           plan: result.plan,
@@ -1188,7 +1256,7 @@ const DevPage = () => {
                           isProjectRulesComplete: !!result.projectRules,
                           arePhasesComplete: !!result.phases?.length,
                         };
-                        
+
                         await saveDocsData(docsData);
                       } else if (data.type === 'error') {
                         console.error('Streaming error:', data.error);
@@ -1206,20 +1274,20 @@ const DevPage = () => {
             }
           }
         }
-        
+
         // Process any remaining buffered data
-        if (buffer.trim()) { 
+        if (buffer.trim()) {
           const lines = buffer.split('\n');
           for (const line of lines) {
             if (line.startsWith('data: ') && line.length > 6) {
               const jsonStr = line.slice(6).trim();
-              
+
               try {
                 if (jsonStr) {
 
-                  
+
                   const data = JSON.parse(jsonStr);
-                  
+
                   if (data.type === 'complete') {
                     const result = data.result;
                     setPhaseCount(result.phaseCount);
@@ -1229,7 +1297,7 @@ const DevPage = () => {
                     setProjectStructure(result.projectStructure);
                     setUiUX(result.uiUX);
                     setProjectRules(result.projectRules);
-                    
+
                     // Save all docs to database
                     const docsData: ContextualDocsData = {
                       plan: result.plan,
@@ -1246,7 +1314,7 @@ const DevPage = () => {
                       isProjectRulesComplete: !!result.projectRules,
                       arePhasesComplete: !!result.phases?.length,
                     };
-                    
+
                     await saveDocsData(docsData);
                   } else if (data.type === 'error') {
                     console.error('Streaming error:', data.error);
@@ -1289,13 +1357,13 @@ const DevPage = () => {
 
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputMessage(e.target.value);
-     
+
     // Auto-resize the textarea
     const textarea = e.target;
     textarea.style.height = 'auto';
     const scrollHeight = textarea.scrollHeight;
     const maxHeight = 180; // Maximum height in pixels (about 7-8 lines)
-    
+
     if (scrollHeight <= maxHeight) {
       textarea.style.height = scrollHeight + 'px';
       setTextareaHeight(scrollHeight + 'px');
@@ -1305,14 +1373,14 @@ const DevPage = () => {
     }
   };
 
-  if(isLoadingChat){
+  if (isLoadingChat) {
     return (
       <div className="flex items-center justify-center h-screen bg-black">
         <Loader2 className="h-8 w-8 animate-spin text-red-500 " />
       </div>
     );
   }
- 
+
 
   // Fullscreen Architecture view
   if (isFullscreen) {
@@ -1326,7 +1394,7 @@ const DevPage = () => {
           >
             <X className="h-5 w-5 text-gray-300 group-hover:text-white" />
           </button>
-          
+
           {/* Version Dropdown in fullscreen */}
           {allArchitectures.length > 0 && (
             <div className="relative">
@@ -1338,16 +1406,16 @@ const DevPage = () => {
                 <span className="font-medium">Version {toRomanNumeral(selectedVersionIndex + 1)}</span>
                 <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${isVersionDropdownOpen ? 'rotate-180' : ''}`} />
               </button>
-              
+
               {/* Dropdown Menu */}
               {isVersionDropdownOpen && (
                 <>
                   {/* Backdrop to close dropdown */}
-                  <div 
-                    className="fixed inset-0 z-30" 
+                  <div
+                    className="fixed inset-0 z-30"
                     onClick={() => setIsVersionDropdownOpen(false)}
                   />
-                  
+
                   {/* Dropdown content */}
                   <div className="absolute right-0 mt-2 w-48 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-40 overflow-hidden">
                     <div className="py-1 max-h-64 overflow-y-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-600">
@@ -1355,11 +1423,10 @@ const DevPage = () => {
                         <button
                           key={arch.metadata.id}
                           onClick={() => handleVersionChange(index)}
-                          className={`w-full text-left px-4 py-2 text-sm transition-colors ${
-                            index === selectedVersionIndex
-                              ? 'bg-red-500/20 text-white border-l-2 border-red-500'
-                              : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-                          }`}
+                          className={`w-full text-left px-4 py-2 text-sm transition-colors ${index === selectedVersionIndex
+                            ? 'bg-red-500/20 text-white border-l-2 border-red-500'
+                            : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                            }`}
                         >
                           <div className="flex items-center justify-between">
                             <span className="font-medium">Version {toRomanNumeral(index + 1)}</span>
@@ -1380,8 +1447,8 @@ const DevPage = () => {
         {/* Fullscreen Architecture */}
         <div className="flex-1 p-8 pt-16 overflow-hidden">
           <div className="h-full">
-            <Architecture 
-              architectureData={architectureData || undefined} 
+            <Architecture
+              architectureData={architectureData || undefined}
               isLoading={isArchitectureLoading}
               isFullscreen={true}
               customPositions={componentPositions}
@@ -1401,41 +1468,41 @@ const DevPage = () => {
         {/* Left side - Burger menu and Logo */}
         <div className="flex items-center space-x-4">
           {/* Burger menu indicator - hide when sidebar is open */}
-          <button 
-              onClick={() => setIsDevSidebarHovered(!isDevSidebarHovered)}
-              className={`p-2 hover:bg-gray-800/50 rounded-lg transition-all duration-200`}
-              title="Open sidebar"
-            > 
-              <Menu 
-                className={`h-6 w-6 text-gray-400 hover:text-white transition-colors`}
-              />
-            </button>
-        
-          
+          <button
+            onClick={() => setIsDevSidebarHovered(!isDevSidebarHovered)}
+            className={`p-2 hover:bg-gray-800/50 rounded-lg transition-all duration-200`}
+            title="Open sidebar"
+          >
+            <Menu
+              className={`h-6 w-6 text-gray-400 hover:text-white transition-colors`}
+            />
+          </button>
+
+
           {/* Logo - clickable to home */}
           <button
-                onClick={() => router.push('/')}
-                className="flex items-center cursor-pointer hover:opacity-80 transition-opacity group"
-                title="Go to Home"
-              >
-                <Image
-                src="/text01.png"
-                alt="DevilDev Logo"
-                width={15000}
-                height={4000}
-                className="h-full w-32 "
-                priority
-              />
+            onClick={() => router.push('/')}
+            className="flex items-center cursor-pointer hover:opacity-80 transition-opacity group"
+            title="Go to Home"
+          >
+            <Image
+              src="/text01.png"
+              alt="DevilDev Logo"
+              width={15000}
+              height={4000}
+              className="h-full w-32 "
+              priority
+            />
           </button>
-        </div> 
+        </div>
 
         {/* Right side - How to, Feedback button and User avatar */}
         <div className="flex items-center space-x-3">
 
-           {/* Soul Count */}
-           <SoulCount />
+          {/* Soul Count */}
+          <SoulCount />
 
-        {/* <button
+          {/* <button
             onClick={() => window.open('/connect-mcp', '_blank')}
             className="flex items-center space-x-2 px-3 py-2 bg-black hover:bg-gray-900 border border-white hover:border-gray-300 rounded-lg transition-all duration-200 group"
             title="Send Feedback"
@@ -1472,7 +1539,7 @@ const DevPage = () => {
 
       {/* Hover trigger area - invisible but extends to far left */}
       {isSignedIn && (
-        <div 
+        <div
           className="fixed top-16 left-0 w-4 h-[calc(100vh-4rem)] z-30"
           onMouseEnter={() => setIsDevSidebarHovered(true)}
         />
@@ -1480,16 +1547,15 @@ const DevPage = () => {
 
       {/* Hover-expandable Sidebar for signed in users */}
       {isSignedIn && (
-        <div 
-          className={`fixed top-16 left-0 h-[calc(100vh-4rem)] bg-black/30 backdrop-blur-md border-r border-red-500/20 transition-all duration-300 ease-in-out z-20 group ${
-            isDevSidebarHovered ? 'w-72' : 'w-0'
-          } overflow-hidden`}
+        <div
+          className={`fixed top-16 left-0 h-[calc(100vh-4rem)] bg-black/30 backdrop-blur-md border-r border-red-500/20 transition-all duration-300 ease-in-out z-20 group ${isDevSidebarHovered ? 'w-72' : 'w-0'
+            } overflow-hidden`}
           onMouseLeave={() => setIsDevSidebarHovered(false)}
         >
-          
+
           {/* Subtle glow effect */}
           <div className="absolute inset-0 bg-gradient-to-r from-red-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-          
+
           <div className="relative flex flex-col h-full pt-8 pb-3">
             {/* Top navigation items */}
             <div className="px-2 space-y-2">
@@ -1499,9 +1565,8 @@ const DevPage = () => {
                 title="New Chat"
               >
                 <Plus className="h-5 w-5 flex-shrink-0 group-hover/item:scale-105 transition-transform duration-200 text-red-400" />
-                <span className={`text-sm font-medium whitespace-nowrap transition-all duration-300 ${
-                  isDevSidebarHovered ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4'
-                }`}>
+                <span className={`text-sm font-medium whitespace-nowrap transition-all duration-300 ${isDevSidebarHovered ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4'
+                  }`}>
                   New Chat
                 </span>
               </button>
@@ -1511,9 +1576,8 @@ const DevPage = () => {
                 title="Community"
               >
                 <Users className="h-5 w-5 flex-shrink-0 group-hover/item:scale-105 transition-transform duration-200 text-red-400" />
-                <span className={`text-sm font-medium whitespace-nowrap transition-all duration-300 ${
-                  isDevSidebarHovered ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4'
-                }`}>
+                <span className={`text-sm font-medium whitespace-nowrap transition-all duration-300 ${isDevSidebarHovered ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4'
+                  }`}>
                   Community
                 </span>
               </a>
@@ -1523,9 +1587,8 @@ const DevPage = () => {
                 title="Contact"
               >
                 <Phone className="h-5 w-5 flex-shrink-0 group-hover/item:scale-105 transition-transform duration-200 text-red-400" />
-                <span className={`text-sm font-medium whitespace-nowrap transition-all duration-300 ${
-                  isDevSidebarHovered ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4'
-                }`}>
+                <span className={`text-sm font-medium whitespace-nowrap transition-all duration-300 ${isDevSidebarHovered ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4'
+                  }`}>
                   Contact
                 </span>
               </a>
@@ -1538,15 +1601,13 @@ const DevPage = () => {
             <div className="flex-1 px-2">
               <div className="flex items-center space-x-4 px-3 py-2  mb-3">
                 <MessageCircle className="h-5 w-5 text-red-400/70 flex-shrink-0" />
-                <span className={`text-sm font-medium text-red-400/90 whitespace-nowrap transition-all duration-300 ${
-                  isDevSidebarHovered ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4'
-                }`}>
+                <span className={`text-sm font-medium text-red-400/90 whitespace-nowrap transition-all duration-300 ${isDevSidebarHovered ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4'
+                  }`}>
                   Chats
                 </span>
               </div>
-              <div className={`space-y-1 transition-all duration-300 ${
-                isDevSidebarHovered ? 'opacity-100' : 'opacity-0'
-              } max-h-96 overflow-y-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-red-500/20`}>
+              <div className={`space-y-1 transition-all duration-300 ${isDevSidebarHovered ? 'opacity-100' : 'opacity-0'
+                } max-h-96 overflow-y-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-red-500/20`}>
                 {chatsLoading ? (
                   <div className="flex items-center justify-center px-6 py-4">
                     <Loader2 className="h-4 w-4 animate-spin text-red-400/60" />
@@ -1555,12 +1616,11 @@ const DevPage = () => {
                   userChats.map((chat) => (
                     <button
                       key={chat.id}
-                      onClick={() => router.push(`/dev/${chat.id}`)} 
-                      className={`w-full text-left px-3 py-2.5 rounded-md border transition-all duration-200 group/chat ${
-                        chat.id === chatId 
-                          ? 'text-white bg-red-500/20 border-red-500/40' 
-                          : 'text-gray-300 hover:text-white hover:bg-black/30 hover:border-red-500/20 border-transparent'
-                      }`}
+                      onClick={() => router.push(`/dev/${chat.id}`)}
+                      className={`w-full text-left px-3 py-2.5 rounded-md border transition-all duration-200 group/chat ${chat.id === chatId
+                        ? 'text-white bg-red-500/20 border-red-500/40'
+                        : 'text-gray-300 hover:text-white hover:bg-black/30 hover:border-red-500/20 border-transparent'
+                        }`}
                       title={chat.title || 'Untitled Chat'}
                     >
                       <div className="truncate text-sm font-medium">
@@ -1588,9 +1648,8 @@ const DevPage = () => {
                     {user?.firstName?.charAt(0) || user?.emailAddresses?.[0]?.emailAddress.charAt(0) || "U"}
                   </AvatarFallback>
                 </Avatar>
-                <div className={`flex-1 min-w-0 transition-all duration-300 ${
-                  isDevSidebarHovered ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4'
-                }`}>
+                <div className={`flex-1 min-w-0 transition-all duration-300 ${isDevSidebarHovered ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4'
+                  }`}>
                   <p className="text-sm font-medium text-white truncate">
                     {user?.fullName || user?.emailAddresses?.[0]?.emailAddress}
                   </p>
@@ -1613,7 +1672,7 @@ const DevPage = () => {
         {!isMobile && (
           <>
             {/* Left Chat Panel - Resizable */}
-            <div 
+            <div
               className="bg-black border border-gray-800 rounded-xl flex flex-col min-h-0 transition-all duration-200 ease-out"
               style={{ width: `${leftPanelWidth}%` }}
             >
@@ -1646,7 +1705,7 @@ const DevPage = () => {
                 onInterviewComplete={handleInterviewComplete}
               />
 
-            
+
 
               {/* Input Area */}
               <ChatInput
@@ -1661,15 +1720,14 @@ const DevPage = () => {
             </div>
 
             {/* Resize Handle */}
-            <div 
-              className={`w-1 bg-transparent hover:bg-gray-500/50 cursor-col-resize transition-all duration-200 relative group ${
-                isResizing ? 'bg-gray-500/70' : ''
-              }`}
+            <div
+              className={`w-1 bg-transparent hover:bg-gray-500/50 cursor-col-resize transition-all duration-200 relative group ${isResizing ? 'bg-gray-500/70' : ''
+                }`}
               onMouseDown={handleResizeStart}
             >
               {/* Invisible wider hit area for easier grabbing */}
               <div className="absolute inset-0 -left-2 -right-2 w-5"></div>
-              
+
               {/* Visual indicator on hover */}
               <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                 <div className="w-0.5 h-8 bg-gray-400 rounded-full"></div>
@@ -1677,48 +1735,45 @@ const DevPage = () => {
             </div>
 
             {/* Right Panel with Tabs */}
-            <div 
+            <div
               className="bg-black border border-gray-800 rounded-xl flex flex-col min-h-0 transition-all duration-200 ease-out"
               style={{ width: `${100 - leftPanelWidth}%` }}
             >
               {/* Clean Tab Headers */}
               <div className="flex items-center justify-between px-4 py-3 rounded-t-xl border-b border-gray-800">
-                <div className="flex space-x-1"> 
+                <div className="flex space-x-1">
                   <button
                     onClick={() => setActiveTab('architecture')}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${
-                      activeTab === 'architecture'
-                        ? 'text-white bg-gray-700/50'
-                        : 'text-gray-400 hover:text-white'
-                    }`}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'architecture'
+                      ? 'text-white bg-gray-700/50'
+                      : 'text-gray-400 hover:text-white'
+                      }`}
                   >
                     Architecture
                   </button>
 
                   <button
                     onClick={() => setActiveTab('stacks')}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${
-                      activeTab === 'stacks'
-                        ? 'text-white bg-gray-700/50'
-                        : 'text-gray-400 hover:text-white'
-                    }`}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'stacks'
+                      ? 'text-white bg-gray-700/50'
+                      : 'text-gray-400 hover:text-white'
+                      }`}
                   >
                     Stack Options
                   </button>
-                  
+
                   <button
                     onClick={() => setActiveTab('context')}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${
-                      activeTab === 'context'
-                        ? 'text-white bg-gray-700/50'
-                        : 'text-gray-400 hover:text-white'
-                    } ${(!docsGenerated && !isStreamingDocs && !isGeneratingDocs) ? 'disabled:hover:cursor-not-allowed' : ''}`}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'context'
+                      ? 'text-white bg-gray-700/50'
+                      : 'text-gray-400 hover:text-white'
+                      } ${(!docsGenerated && !isStreamingDocs && !isGeneratingDocs) ? 'disabled:hover:cursor-not-allowed' : ''}`}
                     disabled={!docsGenerated && !isStreamingDocs && !isGeneratingDocs}
                   >
                     Contextual Docs
                   </button>
                 </div>
-                
+
                 {/* Version dropdown and Fullscreen button - only show for architecture tab */}
                 {activeTab === 'architecture' && (
                   <div className="flex items-center space-x-2">
@@ -1733,16 +1788,16 @@ const DevPage = () => {
                           <span className="font-medium">Version {toRomanNumeral(selectedVersionIndex + 1)}</span>
                           <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${isVersionDropdownOpen ? 'rotate-180' : ''}`} />
                         </button>
-                        
+
                         {/* Dropdown Menu */}
                         {isVersionDropdownOpen && (
                           <>
                             {/* Backdrop to close dropdown */}
-                            <div 
-                              className="fixed inset-0 z-30" 
+                            <div
+                              className="fixed inset-0 z-30"
                               onClick={() => setIsVersionDropdownOpen(false)}
                             />
-                            
+
                             {/* Dropdown content */}
                             <div className="absolute right-0 mt-2 w-48 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-40 overflow-hidden">
                               <div className="py-1 max-h-64 overflow-y-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-600">
@@ -1750,11 +1805,10 @@ const DevPage = () => {
                                   <button
                                     key={arch.metadata.id}
                                     onClick={() => handleVersionChange(index)}
-                                    className={`w-full text-left px-4 py-2 text-sm transition-colors ${
-                                      index === selectedVersionIndex
-                                        ? 'bg-red-500/20 text-white border-l-2 border-red-500'
-                                        : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-                                    }`}
+                                    className={`w-full text-left px-4 py-2 text-sm transition-colors ${index === selectedVersionIndex
+                                      ? 'bg-red-500/20 text-white border-l-2 border-red-500'
+                                      : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                                      }`}
                                   >
                                     <div className="flex items-center justify-between">
                                       <span className="font-medium">Version {toRomanNumeral(index + 1)}</span>
@@ -1770,7 +1824,7 @@ const DevPage = () => {
                         )}
                       </div>
                     )}
-                    
+
                     {/* Fullscreen button */}
                     <button
                       onClick={() => setIsFullscreen(true)}
@@ -1786,8 +1840,8 @@ const DevPage = () => {
               {/* Tab Content */}
               <div className="flex-1 overflow-hidden min-h-0 p-4">
                 <div className={`h-full ${activeTab === 'architecture' ? 'block' : 'hidden'}`}>
-                  <Architecture 
-                    architectureData={architectureData || undefined} 
+                  <Architecture
+                    architectureData={architectureData || undefined}
                     isLoading={isArchitectureLoading}
                     customPositions={componentPositions}
                     onPositionsChange={handlePositionChange}
@@ -1802,22 +1856,25 @@ const DevPage = () => {
                     selectedStackId={selectedStackId}
                     onSelect={setSelectedStackId}
                     isLoading={archOptionsLoading}
+                    isGenerating={isGeneratingMainArch}
+                    onGenerate={handleStackGenerate}
+                    generatedStackIds={generatedStackIds}
                   />
                 </div>
-                
+
                 <div className={`h-full ${activeTab === 'context' ? 'block' : 'hidden'}`}>
-                  <FileExplorer 
-                    projectRules={projectRules} 
-                    plan={plan} 
-                    phaseCount={phaseCount} 
-                    phases={phases} 
-                    prd={prd} 
-                    projectStructure={projectStructure} 
+                  <FileExplorer
+                    projectRules={projectRules}
+                    plan={plan}
+                    phaseCount={phaseCount}
+                    phases={phases}
+                    prd={prd}
+                    projectStructure={projectStructure}
                     uiUX={uiUX}
                     streamingUpdates={streamingUpdates}
                     isGenerating={isStreamingDocs}
                     downloadButtonRef={downloadButtonRef}
-                  /> 
+                  />
                 </div>
               </div>
             </div>
@@ -1828,7 +1885,7 @@ const DevPage = () => {
         {isMobile && (
           <>
             {/* Chat Panel - 85% height */}
-            <div 
+            <div
               className="bg-black border border-gray-800 rounded-xl flex flex-col min-h-0 transition-all duration-200 ease-out w-full h-[85%]"
             >
               <div className="flex items-center px-4 py-3 rounded-t-xl border-b border-gray-800">
@@ -1840,7 +1897,7 @@ const DevPage = () => {
                   </button>
                 </div>
               </div>
-              
+
               {/* Chat Messages with refactored component */}
               <ChatMessageList
                 messages={messages}
@@ -1861,7 +1918,7 @@ const DevPage = () => {
                 onInterviewComplete={handleInterviewComplete}
               />
 
-            
+
 
               {/* Input Area */}
               <ChatInput
@@ -1889,11 +1946,10 @@ const DevPage = () => {
                       setActiveTab('architecture');
                       setIsMobilePanelOpen(true);
                     }}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${
-                      activeTab === 'architecture'
-                        ? 'text-white bg-gray-700/50'
-                        : 'text-gray-400'
-                    }`}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'architecture'
+                      ? 'text-white bg-gray-700/50'
+                      : 'text-gray-400'
+                      }`}
                   >
                     Architecture
                   </button>
@@ -1903,31 +1959,29 @@ const DevPage = () => {
                       setActiveTab('stacks');
                       setIsMobilePanelOpen(true);
                     }}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${
-                      activeTab === 'stacks'
-                        ? 'text-white bg-gray-700/50'
-                        : 'text-gray-400'
-                    }`}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'stacks'
+                      ? 'text-white bg-gray-700/50'
+                      : 'text-gray-400'
+                      }`}
                   >
                     Stacks
                   </button>
-                  
+
                   <button
                     onClick={() => {
                       setActiveTab('context');
                       setIsMobilePanelOpen(true);
                     }}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${
-                      activeTab === 'context'
-                        ? 'text-white bg-gray-700/50'
-                        : 'text-gray-400'
-                    } ${(!docsGenerated && !isStreamingDocs && !isGeneratingDocs) ? 'opacity-50' : ''}`}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'context'
+                      ? 'text-white bg-gray-700/50'
+                      : 'text-gray-400'
+                      } ${(!docsGenerated && !isStreamingDocs && !isGeneratingDocs) ? 'opacity-50' : ''}`}
                     disabled={!docsGenerated && !isStreamingDocs && !isGeneratingDocs}
                   >
                     Docs
                   </button>
                 </div>
-                
+
                 {/* Expand button */}
                 <button
                   onClick={() => setIsMobilePanelOpen(true)}
@@ -1936,7 +1990,7 @@ const DevPage = () => {
                   <Maximize className="h-4 w-4" />
                 </button>
               </div>
-              
+
               {/* Content preview area */}
               <div className="flex-1 p-4 flex items-center justify-center">
                 <div className="text-gray-400 text-sm text-center">
@@ -1958,39 +2012,36 @@ const DevPage = () => {
                 <div className="flex space-x-2">
                   <button
                     onClick={() => setActiveTab('architecture')}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${
-                      activeTab === 'architecture'
-                        ? 'text-white bg-gray-700/50'
-                        : 'text-gray-400'
-                    }`}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'architecture'
+                      ? 'text-white bg-gray-700/50'
+                      : 'text-gray-400'
+                      }`}
                   >
                     Architecture
                   </button>
 
                   <button
                     onClick={() => setActiveTab('stacks')}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${
-                      activeTab === 'stacks'
-                        ? 'text-white bg-gray-700/50'
-                        : 'text-gray-400'
-                    }`}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'stacks'
+                      ? 'text-white bg-gray-700/50'
+                      : 'text-gray-400'
+                      }`}
                   >
                     Stack Options
                   </button>
-                  
+
                   <button
                     onClick={() => setActiveTab('context')}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${
-                      activeTab === 'context'
-                        ? 'text-white bg-gray-700/50'
-                        : 'text-gray-400'
-                    } ${(!docsGenerated && !isStreamingDocs && !isGeneratingDocs) ? 'opacity-50' : ''}`}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'context'
+                      ? 'text-white bg-gray-700/50'
+                      : 'text-gray-400'
+                      } ${(!docsGenerated && !isStreamingDocs && !isGeneratingDocs) ? 'opacity-50' : ''}`}
                     disabled={!docsGenerated && !isStreamingDocs && !isGeneratingDocs}
                   >
                     Contextual Docs
                   </button>
                 </div>
-                
+
                 <div className="flex items-center space-x-2">
                   {/* Version Dropdown for mobile */}
                   {activeTab === 'architecture' && allArchitectures.length > 0 && (
@@ -2003,16 +2054,16 @@ const DevPage = () => {
                         <span className="font-medium">V{toRomanNumeral(selectedVersionIndex + 1)}</span>
                         <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${isVersionDropdownOpen ? 'rotate-180' : ''}`} />
                       </button>
-                      
+
                       {/* Dropdown Menu */}
                       {isVersionDropdownOpen && (
                         <>
                           {/* Backdrop to close dropdown */}
-                          <div 
-                            className="fixed inset-0 z-30" 
+                          <div
+                            className="fixed inset-0 z-30"
                             onClick={() => setIsVersionDropdownOpen(false)}
                           />
-                          
+
                           {/* Dropdown content */}
                           <div className="absolute right-0 mt-2 w-48 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-40 overflow-hidden">
                             <div className="py-1 max-h-64 overflow-y-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-600">
@@ -2020,11 +2071,10 @@ const DevPage = () => {
                                 <button
                                   key={arch.metadata.id}
                                   onClick={() => handleVersionChange(index)}
-                                  className={`w-full text-left px-4 py-2 text-sm transition-colors ${
-                                    index === selectedVersionIndex
-                                      ? 'bg-red-500/20 text-white border-l-2 border-red-500'
-                                      : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-                                  }`}
+                                  className={`w-full text-left px-4 py-2 text-sm transition-colors ${index === selectedVersionIndex
+                                    ? 'bg-red-500/20 text-white border-l-2 border-red-500'
+                                    : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                                    }`}
                                 >
                                   <div className="flex items-center justify-between">
                                     <span className="font-medium">Version {toRomanNumeral(index + 1)}</span>
@@ -2040,7 +2090,7 @@ const DevPage = () => {
                       )}
                     </div>
                   )}
-                  
+
                   {/* Close button */}
                   <button
                     onClick={() => setIsMobilePanelOpen(false)}
@@ -2054,8 +2104,8 @@ const DevPage = () => {
               {/* Content */}
               <div className="flex-1 overflow-y-auto p-4">
                 <div className={`h-full ${activeTab === 'architecture' ? 'block' : 'hidden'}`}>
-                  <Architecture 
-                    architectureData={architectureData || undefined} 
+                  <Architecture
+                    architectureData={architectureData || undefined}
                     isLoading={isArchitectureLoading}
                     customPositions={componentPositions}
                     onPositionsChange={handlePositionChange}
@@ -2070,22 +2120,25 @@ const DevPage = () => {
                     selectedStackId={selectedStackId}
                     onSelect={setSelectedStackId}
                     isLoading={archOptionsLoading}
+                    isGenerating={isGeneratingMainArch}
+                    onGenerate={handleStackGenerate}
+                    generatedStackIds={generatedStackIds}
                   />
                 </div>
-                
+
                 <div className={`h-full ${activeTab === 'context' ? 'block' : 'hidden'}`}>
-                  <FileExplorer 
-                    projectRules={projectRules} 
-                    plan={plan} 
-                    phaseCount={phaseCount} 
-                    phases={phases} 
-                    prd={prd} 
-                    projectStructure={projectStructure} 
+                  <FileExplorer
+                    projectRules={projectRules}
+                    plan={plan}
+                    phaseCount={phaseCount}
+                    phases={phases}
+                    prd={prd}
+                    projectStructure={projectStructure}
                     uiUX={uiUX}
                     streamingUpdates={streamingUpdates}
                     isGenerating={isStreamingDocs}
                     downloadButtonRef={downloadButtonRef}
-                  /> 
+                  />
                 </div>
               </div>
             </div>
@@ -2093,7 +2146,7 @@ const DevPage = () => {
         </div>
       </div>
 
-      <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-red-500 to-transparent"/>
+      <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-red-500 to-transparent" />
 
       {/* How to Dialog */}
       {isHowToOpen && (
@@ -2102,7 +2155,7 @@ const DevPage = () => {
             {/* Background decoration */}
             <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-purple-500/5 rounded-2xl"></div>
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-purple-500"></div>
-            
+
             <div className="relative">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center space-x-3">
@@ -2118,7 +2171,7 @@ const DevPage = () => {
                   <X className="h-5 w-5" />
                 </button>
               </div>
-              
+
               <div className="space-y-6 text-gray-300">
                 <div className="space-y-4">
                   <div className="flex items-start space-x-4">
@@ -2128,7 +2181,7 @@ const DevPage = () => {
                       <p className="text-gray-300">Describe your project idea, features you want to build, or ask technical questions. Be as detailed as possible for better results.</p>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-start space-x-4">
                     <div className="flex-shrink-0 w-8 h-8 bg-blue-500/20 rounded-full flex items-center justify-center text-blue-400 font-bold text-sm">2</div>
                     <div>
@@ -2136,7 +2189,7 @@ const DevPage = () => {
                       <p className="text-gray-300">DevilDev will generate a visual architecture diagram showing how your components connect and interact.</p>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-start space-x-4">
                     <div className="flex-shrink-0 w-8 h-8 bg-blue-500/20 rounded-full flex items-center justify-center text-blue-400 font-bold text-sm">3</div>
                     <div>
@@ -2144,7 +2197,7 @@ const DevPage = () => {
                       <p className="text-gray-300">Click "Generate Docs" to create comprehensive project documentation, including PRD, project structure, and implementation phases.</p>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-start space-x-4">
                     <div className="flex-shrink-0 w-8 h-8 bg-blue-500/20 rounded-full flex items-center justify-center text-blue-400 font-bold text-sm">4</div>
                     <div>
@@ -2153,7 +2206,7 @@ const DevPage = () => {
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 mt-6">
                   <h4 className="font-semibold text-blue-300 mb-2">💡 Pro Tips</h4>
                   <ul className="space-y-1 text-sm text-gray-300">
@@ -2164,7 +2217,7 @@ const DevPage = () => {
                   </ul>
                 </div>
               </div>
-              
+
               <div className="flex justify-end mt-8">
                 <button
                   onClick={() => setIsHowToOpen(false)}
@@ -2191,7 +2244,7 @@ const DevPage = () => {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            
+
             <div className="space-y-4">
               <textarea
                 value={feedbackText}
@@ -2201,18 +2254,17 @@ const DevPage = () => {
                 maxLength={1000}
                 disabled={isSubmittingFeedback}
               />
-              
+
               {/* Success/Error Message */}
               {feedbackMessage && (
-                <div className={`p-3 rounded-md text-sm ${
-                  feedbackMessage.type === 'success' 
-                    ? 'bg-green-900/50 border border-green-600/50 text-green-300' 
-                    : 'bg-red-900/50 border border-red-600/50 text-red-300'
-                }`}>
+                <div className={`p-3 rounded-md text-sm ${feedbackMessage.type === 'success'
+                  ? 'bg-green-900/50 border border-green-600/50 text-green-300'
+                  : 'bg-red-900/50 border border-red-600/50 text-red-300'
+                  }`}>
                   {feedbackMessage.text}
                 </div>
               )}
-              
+
               <div className="flex justify-between">
                 <button
                   onClick={() => {
@@ -2301,7 +2353,7 @@ const DevPage = () => {
         nextLabel="Got it"
         showSkip={false}
       />)}
-      
+
 
       {/* Coach Mark for Download Button */}
       <CoachMark
@@ -2318,15 +2370,15 @@ const DevPage = () => {
       />
 
       {/* Character Limit Pricing Dialog */}
-      <PricingDialog 
-        open={showCharacterLimitDialog} 
+      <PricingDialog
+        open={showCharacterLimitDialog}
         onOpenChange={setShowCharacterLimitDialog}
         description="You've reached the maximum token limit for this chat. Upgrade to Pro to unlock extended token limits and continue your conversation."
       />
 
       {/* Low Souls Pricing Dialog */}
-      <PricingDialog 
-        open={showLowSoulsDialog} 
+      <PricingDialog
+        open={showLowSoulsDialog}
         onOpenChange={setShowLowSoulsDialog}
         description="Your souls count is low. Please upgrade or buy more souls to continue."
       />

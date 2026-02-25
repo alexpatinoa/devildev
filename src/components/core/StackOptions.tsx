@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronLeft, ArrowRight, Info } from 'lucide-react';
+import { ChevronLeft, ArrowRight, Info, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -33,6 +33,9 @@ interface StackOptionsProps {
   selectedStackId?: string | null;
   onSelect: (stackId: string) => void;
   isLoading?: boolean;
+  isGenerating?: boolean;
+  onGenerate?: (stackOption: StackOption) => void;
+  generatedStackIds?: string[];
 }
 
 export const StackOptions: React.FC<StackOptionsProps> = ({
@@ -42,6 +45,9 @@ export const StackOptions: React.FC<StackOptionsProps> = ({
   selectedStackId,
   onSelect,
   isLoading,
+  isGenerating = false,
+  onGenerate,
+  generatedStackIds = [],
 }) => {
   if (isLoading) {
     return (
@@ -136,7 +142,7 @@ export const StackOptions: React.FC<StackOptionsProps> = ({
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5 flex-1 min-h-0 overflow-y-auto lg:overflow-hidden pb-4">
         {selectedOptionSet.stacks.map((option) => {
-          const isSelected = selectedStackId === option.id;
+          const isGenerated = generatedStackIds.includes(option.id);
           return (
             <div
               key={option.id}
@@ -144,7 +150,10 @@ export const StackOptions: React.FC<StackOptionsProps> = ({
             >
               {/* Card click target to select */}
               <button
-                onClick={() => onSelect(option.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelect(option.id);
+                }}
                 className="absolute inset-0 z-0 focus:outline-none "
                 aria-label={`Select ${option.name}`}
               >
@@ -215,14 +224,32 @@ export const StackOptions: React.FC<StackOptionsProps> = ({
 
                   <Button
                     variant="outline"
-                    className="flex-1 bg-transparent cursor-pointer hover:bg-rose-500/10 text-rose-500 border border-rose-500 text-[13px] shadow-none font-semibold transition-colors"
+                    className={`flex-1 bg-transparent hover:bg-rose-500/10 text-rose-500 border border-rose-500 text-[13px] shadow-none font-semibold transition-colors ${isGenerating || isGenerated ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                    disabled={isGenerating || isGenerated}
                     onClick={(e) => {
                       e.stopPropagation();
+                      if (isGenerated) return;
                       onSelect(option.id);
+                      if (onGenerate) {
+                        onGenerate(option);
+                      }
                     }}
                   >
-                    Generate
-                    <ArrowRight className="ml-2 h-4 w-4" />
+                    {isGenerating && selectedStackId === option.id ? (
+                      <>
+                        Generating...
+                        <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                      </>
+                    ) : isGenerated ? (
+                      <>
+                        Already Generated
+                      </>
+                    ) : (
+                      <>
+                        Generate
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </>
+                    )}
                   </Button>
                 </div>
               </div>

@@ -1,10 +1,8 @@
 "use server";
 import { PromptTemplate } from "@langchain/core/prompts";
-import { StringOutputParser } from "@langchain/core/output_parsers";
 import { ChatOpenAI } from "@langchain/openai";
 import { createToolCallingAgent, AgentExecutor } from "langchain/agents";
 import { ChatPromptTemplate, MessagesPlaceholder } from "@langchain/core/prompts";
-import { z } from "zod";
 import { aimlComponentsTool } from "./architecture/aimlComponents"; 
 import { analyticsComponentsTool } from "./architecture/analyticsComponents";
 import { authComponentsTool } from "./architecture/authComponents";
@@ -18,6 +16,9 @@ import { basicWebComponentsTool } from "./architecture/webComponents";
 import { deductCredits, getCredits } from "./credits";
 import { minSoulsToGenArch } from "../Limits";
 import { TokenUsageCallbackHandler } from "../common/TokenUsageHandler";
+import { db } from "@/lib/db";
+import { createParallelWebSearchTool } from "../tools/parallel";
+import { ARCHITECTURE_GENERATION_PROMPT } from "../prompts/dev/architecture";
 const { inngest } = await import('../src/inngest/client');
 
 
@@ -124,16 +125,16 @@ const architectureJsonSchema = {
 };
 
 
-export async function generateArchitectureWithToolCalling(requirement: string, conversationHistory: any[] = [], architectureData: any, userId: string | null = null){
+export async function generateArchitectureWithToolCalling(requirement: string, conversationHistory: any[] = [], architectureData: any, userId: string | null = null) {
   // Format conversation history for the prompt
   const formattedHistory = conversationHistory.map(msg => 
     `${msg.type === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
-).join('\n');
+  ).join('\n');
 
-const llm = new ChatOpenAI({openAIApiKey: process.env.OPENAI_API_KEY, model: "gpt-5-mini-2025-08-07"});
+  const llm = new ChatOpenAI({ openAIApiKey: process.env.OPENAI_API_KEY, model: "gpt-5-mini-2025-08-07" });
 
-const prompt = ChatPromptTemplate.fromMessages([
-  ["system", `You are DevilDev, an expert software architect specializing in modern, production-ready systems. Your primary task is to analyze software requirements and generate comprehensive architecture components using the appropriate tools, then return a structured JSON response.
+  const prompt = ChatPromptTemplate.fromMessages([
+    ["system", `You are DevilDev, an expert software architect specializing in modern, production-ready systems. Your primary task is to analyze software requirements and generate comprehensive architecture components using the appropriate tools, then return a structured JSON response.
 
 MANDATORY TOOL SELECTION:
 You MUST call exactly ONE of these platform tools based on the requirement:
@@ -192,8 +193,8 @@ CRITICAL SUCCESS FACTORS:
 2. ONLY call additional tools when the requirement explicitly needs those features
 3. Component data must match tool outputs exactly
 4. Provide clear, actionable architecture guidance`],
-  
-  ["human", `Software Requirement: {requirement}
+
+    ["human", `Software Requirement: {requirement}
 
 Conversation History:
 {conversation_history}
@@ -208,11 +209,11 @@ Please analyze this requirement step by step:
 4. Return the structured JSON response with all required components
 
 Focus on creating a practical, production-ready architecture that directly addresses the stated requirements.`],
-  
-  new MessagesPlaceholder("agent_scratchpad")
-]); 
- 
-const finalPrompt = PromptTemplate.fromTemplate(`
+
+    new MessagesPlaceholder("agent_scratchpad")
+  ]);
+
+  const finalPrompt = PromptTemplate.fromTemplate(`
   You are an expert Software Architecture Synthesizer. Your job is to take individual technology components and create a cohesive, well-structured architecture diagram with proper connections, positioning, and data flow.
   
   INPUT ANALYSIS:
@@ -328,71 +329,142 @@ const finalPrompt = PromptTemplate.fromTemplate(`
   
   Return only the JSON architecture structure.
   `);
-// Use structured output with JSON schema for guaranteed format
-const structuredLlm = llm.withStructuredOutput(architectureJsonSchema);
-const finalChain = finalPrompt.pipe(structuredLlm);
+  // Use structured output with JSON schema for guaranteed format
+  const structuredLlm = llm.withStructuredOutput(architectureJsonSchema);
+  const finalChain = finalPrompt.pipe(structuredLlm);
 
-const tools = [basicWebComponentsTool, aimlComponentsTool, analyticsComponentsTool, authComponentsTool, blockchainComponentsTool, databaseComponentsTool, mobileComponentsTool, notificationComponentsTool, paymentComponentsTool, realtimeComponentsTool];
+  const tools = [basicWebComponentsTool, aimlComponentsTool, analyticsComponentsTool, authComponentsTool, blockchainComponentsTool, databaseComponentsTool, mobileComponentsTool, notificationComponentsTool, paymentComponentsTool, realtimeComponentsTool];
 
-// Create token usage callback handler to track usage across all LLM calls
-const tokenUsageHandler = new TokenUsageCallbackHandler();
+  // Create token usage callback handler to track usage across all LLM calls
+  const tokenUsageHandler = new TokenUsageCallbackHandler();
 
-const agent = await createToolCallingAgent({
-  llm,
-  tools,
-  prompt,
-});
+  const agent = await createToolCallingAgent({
+    llm,
+    tools,
+    prompt,
+  });
 
-const agentExecutor = new AgentExecutor({
-  agent,
-  tools,
-  verbose: true,
-  maxIterations: 10, // Allow multiple tool calls
-});
+  const agentExecutor = new AgentExecutor({
+    agent,
+    tools,
+    verbose: true,
+    maxIterations: 10, // Allow multiple tool calls
+  });
 
-try {
-  const result = await agentExecutor.invoke(
-    {
-      requirement: requirement,
-      conversation_history: formattedHistory,
-      architecture_data: JSON.stringify(architectureData)
-    },
-    { callbacks: [tokenUsageHandler] }
-  );
-  
-  const finalResult = await finalChain.invoke(
-    {
-      requirement: requirement, 
-      conversation_history: formattedHistory, 
-      architectureData: JSON.stringify(architectureData), 
-      list_of_required_stacks: JSON.stringify(result.output)
-    },
-    { callbacks: [tokenUsageHandler] }
-  );
-  
-  // Deduct credits if userId is provided
-  if (userId) {
+  try {
+    const result = await agentExecutor.invoke(
+      {
+        requirement: requirement,
+        conversation_history: formattedHistory,
+        architecture_data: JSON.stringify(architectureData)
+      },
+      { callbacks: [tokenUsageHandler] }
+    );
+
+    const finalResult = await finalChain.invoke(
+      {
+        requirement: requirement,
+        conversation_history: formattedHistory,
+        architectureData: JSON.stringify(architectureData),
+        list_of_required_stacks: JSON.stringify(result.output)
+      },
+      { callbacks: [tokenUsageHandler] }
+    );
+
+    // Deduct credits if userId is provided
+    if (userId) {
+      const usage = tokenUsageHandler.getUsage();
+      const creditResult = await deductCredits(userId, usage.inputTokens, usage.outputTokens);
+      if (!creditResult.success) {
+        console.error("Failed to deduct credits:", creditResult.error);
+      } else {
+        console.log(`Credits deducted: ${creditResult.deducted}, remaining: ${creditResult.remaining}`);
+        console.log(`Total tokens used - Input: ${usage.inputTokens}, Output: ${usage.outputTokens}`);
+      }
+    }
+
+    return finalResult;
+
+  } catch (error) {
+    console.error("Error in generateArchitectureWithToolCalling:", error);
+    throw error;
+  }
+}
+
+
+export async function generateMainArchitecture({
+  requirement,
+  title,
+  technology,
+  description,
+  chatId,
+  stackId,
+  userId
+}: {
+  requirement: string;
+  title: string;
+  technology: string;
+  description: string;
+  chatId: string;
+  stackId: string;
+  userId: string;
+}) {
+  // Check credits before executing
+  const creditsResult = await getCredits(userId);
+  if (creditsResult.success && creditsResult.credits !== undefined && creditsResult.credits < minSoulsToGenArch) {
+    return { success: false, error: 'INSUFFICIENT_CREDITS', remainingCredits: creditsResult.credits };
+  }
+
+  const tokenUsageHandler = new TokenUsageCallbackHandler();
+
+  try {
+    const llm = new ChatOpenAI({ openAIApiKey: process.env.OPENAI_API_KEY, model: "gpt-5-mini-2025-08-07" });
+
+    const prompt = PromptTemplate.fromTemplate(ARCHITECTURE_GENERATION_PROMPT);
+
+    const structuredLlm = llm.withStructuredOutput(architectureJsonSchema);
+    const chain = prompt.pipe(structuredLlm);
+
+    const generatedArchitecture = await chain.invoke(
+      {
+        requirement,
+        title,
+        technology,
+        description,
+      },
+      { callbacks: [tokenUsageHandler] }
+    );
+
+    // Store in DB
+    const newArchitecture = await db.architecture.create({
+      data: {
+        chatId,
+        stackId,
+        requirement,
+        architectureRationale: generatedArchitecture.architectureRationale,
+        components: generatedArchitecture.components,
+        connectionLabels: generatedArchitecture.connectionLabels || {},
+        componentPositions: {},
+      }
+    });
+
+    // Deduct credits
     const usage = tokenUsageHandler.getUsage();
     const creditResult = await deductCredits(userId, usage.inputTokens, usage.outputTokens);
     if (!creditResult.success) {
       console.error("Failed to deduct credits:", creditResult.error);
     } else {
       console.log(`Credits deducted: ${creditResult.deducted}, remaining: ${creditResult.remaining}`);
-      console.log(`Total tokens used - Input: ${usage.inputTokens}, Output: ${usage.outputTokens}`);
     }
+
+    return {
+      success: true,
+      architecture: newArchitecture,
+      creditsRemaining: creditResult.remaining
+    };
+
+  } catch (error) {
+    console.error("Error in generateMainArchitecture:", error);
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
   }
-  
-  return finalResult;
- 
-} catch (error) {
-  console.error("Error in generateArchitectureWithToolCalling:", error);
-  throw error;
 }
-}
-
-
-
-
-
-
-
