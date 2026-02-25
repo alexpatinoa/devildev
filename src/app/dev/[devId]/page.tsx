@@ -34,7 +34,7 @@ import { useParams } from 'next/navigation';
 import { maxChatCharactersLimitFree, maxChatCharactersLimitPro } from '../../../../Limits';
 import useUserSubscription from '@/hooks/useSubscription';
 import PricingDialog from '@/components/PricingDialog';
-import { StackOptions } from '@/components/core/StackOptions';
+import { StackOptions } from '@/components/Dev/StackOptions';
 
 interface UserChat {
   id: string;
