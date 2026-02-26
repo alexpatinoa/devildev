@@ -14,7 +14,6 @@ import Link from 'next/link';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import HomeNav from '@/components/core/HomeNav';
 import GithubOAuthDeprecatedNotice from '@/components/GithubOAuthDeprecatedNotice';
-import useUserSubscription from '@/hooks/useSubscription';
 import PricingDialog from '@/components/PricingDialog';
 import OpenSourceDialog from '@/components/OpenSrcDialog';
 import WelcomeDialog from '@/components/WelcomeDialog';
@@ -63,9 +62,7 @@ export default function Page() {
   const [mounted, setMounted] = useState(false);
   const [isScrolling, setIsScrolling] = useState(false);
   const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
-  // const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isSidebarHovered, setIsSidebarHovered] = useState(false);
   const [userChats, setUserChats] = useState<UserChat[]>([]);
   const [chatsLoading, setChatsLoading] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -74,12 +71,9 @@ export default function Page() {
   const [isOpenSourceDialogOpen, setIsOpenSourceDialogOpen] = useState(false);
   const [isWelcomeDialogOpen, setIsWelcomeDialogOpen] = useState(false);
   // Typewriter rotating heading state
-  const rotatingTexts = ["Visualize your Codebase","10x your vibe coding"];
+  const rotatingTexts = ["Find best way to build", "Visualize your Codebase"];
   const [currentRotateIndex, setCurrentRotateIndex] = useState(0);
   const [displayedRotateText, setDisplayedRotateText] = useState("");
-
-  const { userSubscription, isLoadingUserSubscription, isErrorUserSubscription } = useUserSubscription();
-   
  
   const { isLoaded, isSignedIn, user } = useUser();
   const router = useRouter();
@@ -217,7 +211,7 @@ export default function Page() {
         localStorage.setItem('firstMessage', inputMessage.trim());
         
         // Immediately redirect to dev page
-        router.push(`/dev/${chatId}`);
+        router.push(`/dev/${chatId}`); 
       } catch (error) {
         console.error("Error preparing new chat:", error);
         setIsLoading(false); 
