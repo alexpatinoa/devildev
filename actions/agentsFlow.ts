@@ -1,6 +1,6 @@
 "use server";
 import { ChatOpenAI } from "@langchain/openai";
-import { ChatPromptTemplate, MessagesPlaceholder, PromptTemplate } from "@langchain/core/prompts";
+import { ChatPromptTemplate, HumanMessagePromptTemplate, MessagesPlaceholder, PromptTemplate } from "@langchain/core/prompts";
 import { architectureModificationPrompt, BASE_DEVILDEV_AGENT_PROMPT, DevilDevAgentAfterInterviewRole, DevilDevAgentBeforeInterviewRole } from "../prompts/dev/Chatbot";
 import { deductCredits, getCredits } from "./credits";
 import { minSoulsToSendMessage } from "../Limits";
@@ -56,7 +56,7 @@ export async function chatbot(userInput: string, conversationHistory: any[] = []
 
     const prompt = ChatPromptTemplate.fromMessages([
       ["system", systemRole + "\n" + BASE_DEVILDEV_AGENT_PROMPT],
-      ["user", userInput],
+      HumanMessagePromptTemplate.fromTemplate("{userInput}"),
       new MessagesPlaceholder("agent_scratchpad"),
     ]);
     const agent = await createToolCallingAgent({

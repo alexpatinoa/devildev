@@ -38,8 +38,6 @@ Calling any tool except **web_search** will close the agent. Choose carefully â€
 `;
 
 export const BASE_DEVILDEV_AGENT_PROMPT = `
-${DevilDevAgentBeforeInterviewRole}
-
 <tool_selection_decision_tree>
 1. Does the user have a general question, or are they just chatting?
    â†’ Call **general_response**
