@@ -66,6 +66,7 @@ interface StackData {
   technology: string;
   pros: string[];
   cons: string[];
+  prd?: string | null;
 }
 
 interface ArchOptionsData {
@@ -603,6 +604,17 @@ const DevPage = () => {
       if (result.success && result.architecture) {
         if (result.creditsRemaining !== undefined) {
           notifyCreditsUpdate(result.creditsRemaining);
+        }
+
+        if (result.prd) {
+          setArchOptionsHistory((previous) =>
+            previous.map((optionSet) => ({
+              ...optionSet,
+              stacks: optionSet.stacks.map((stack) =>
+                stack.id === stackOption.id ? { ...stack, prd: result.prd } : stack
+              ),
+            }))
+          );
         }
 
         const archResult = await getArchitecture(chatId);
@@ -1550,7 +1562,11 @@ const DevPage = () => {
                 </div>
 
                 <div className={`h-full ${activeTab === 'context' ? 'block' : 'hidden'}`}>
-                  <FileExplorer />
+                  <FileExplorer
+                    archOptionsHistory={archOptionsHistory}
+                    selectedVersionIndex={selectedVersionIndex}
+                    allArchitectures={allArchitectures}
+                  />
                 </div>
               </div>
             </div>
@@ -1795,7 +1811,11 @@ const DevPage = () => {
                 </div>
 
                 <div className={`h-full ${activeTab === 'context' ? 'block' : 'hidden'}`}>
-                  <FileExplorer />
+                  <FileExplorer
+                    archOptionsHistory={archOptionsHistory}
+                    selectedVersionIndex={selectedVersionIndex}
+                    allArchitectures={allArchitectures}
+                  />
                 </div>
               </div>
             </div>
