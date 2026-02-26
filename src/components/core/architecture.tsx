@@ -870,7 +870,7 @@ export default function Architecture({
         {/* Bottom instruction */}
         <div className="absolute bottom-8 text-center">
           <p className="text-sm text-gray-500">
-            Describe your project requirements to generate a custom architecture diagram
+            Choose a stack option from Stack Options tab and click generate there to see the architecture diagram
           </p>
         </div>
 

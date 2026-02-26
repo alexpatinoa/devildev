@@ -82,7 +82,7 @@ export const StackOptions: React.FC<StackOptionsProps> = ({
         <div className="max-w-lg text-center px-6">
           <h3 className="text-lg font-semibold text-white">No stack options yet</h3>
           <p className="mt-2 text-sm text-gray-400">
-            Continue the chat until the agent generates stack options from tier-2 analysis.
+          Continue the conversation to refine your idea until the agent suggests suitable tech stack options.
           </p>
         </div>
       </div>
