@@ -105,19 +105,39 @@ export const StackOptions: React.FC<StackOptionsProps> = ({
           {optionSets.map((optionSet, idx) => {
             const createdAt = new Date(optionSet.createdAt);
             return (
-              <button
+              <div
                 key={optionSet.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => onSelectOptionSet(optionSet.id)}
-                className="w-full text-left rounded-xl border border-gray-800 bg-gray-900/50 hover:border-red-500/50 transition-all duration-200 px-4 py-3"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onSelectOptionSet(optionSet.id);
+                  }
+                }}
+                className="w-full flex items-center gap-4 rounded-xl border border-gray-800 bg-gray-900/50 hover:border-red-500/50 transition-all duration-200 px-4 py-3 cursor-pointer group"
               >
-                <p className="text-xs uppercase tracking-wide text-gray-400">Option Set {optionSets.length - idx}</p>
-                <p className="mt-1 text-base text-white line-clamp-2">
-                  {optionSet.requirement?.trim() || 'Generated stack options'}
-                </p>
-                <p className="mt-2 text-xs text-gray-500">
-                  {createdAt.toLocaleDateString()}
-                </p>
-              </button>
+                <div className="flex-1 min-w-0 text-left">
+                  <p className="text-xs uppercase tracking-wide text-gray-400">Option Set {optionSets.length - idx}</p>
+                  <p className="mt-1 text-base text-white line-clamp-2">
+                    {optionSet.requirement?.trim() || 'Generated stack options'}
+                  </p>
+                  <p className="mt-2 text-xs text-gray-500">
+                    {createdAt.toLocaleDateString()}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectOptionSet(optionSet.id);
+                  }}
+                  className="shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer text-black bg-white border border-white/80 hover:bg-gray-100 transition-colors"
+                >
+                  Open
+                </button>
+              </div>
             );
           })}
         </div>
