@@ -117,13 +117,16 @@ const generateRandomColor = (): string => {
 const getFromLocalStorage = (
   key: string,
   fallback: () => string,
-  isServer: boolean = typeof window === "undefined"
 ): string => {
-  if (isServer) {
+  try {
+    if (typeof window === "undefined" || typeof window.localStorage?.getItem !== "function") {
+      return fallback()
+    }
+    const value = window.localStorage.getItem(key)
+    return value !== null ? value : fallback()
+  } catch {
     return fallback()
   }
-  const value = window.localStorage.getItem(key)
-  return value !== null ? value : fallback()
 }
 
 const getUsernameFromLocalStorage = (): string => {
