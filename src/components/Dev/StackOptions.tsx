@@ -202,41 +202,43 @@ export const StackOptions: React.FC<StackOptionsProps> = ({
                         More info
                       </Button>
                     </DialogTrigger>
-                    <DialogContent className="max-w-2xl bg-[#181a20] border-gray-800/80 shadow-2xl">
-                      <DialogHeader>
-                        <DialogTitle className="text-xl flex items-center flex-wrap gap-2 text-gray-100 tracking-wide">
-                          {option.name}
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#2a2e39] text-gray-300 border border-[#3a3f4e]">
-                            {option.technology}
-                          </span>
-                        </DialogTitle>
-                        <DialogDescription className="text-[14.5px] text-gray-400 pt-3 leading-relaxed font-light">
-                          {option.description}
-                        </DialogDescription>
-                      </DialogHeader>
+                    <DialogContent className="max-w-2xl w-[calc(100vw-2rem)] max-h-[90dvh] flex flex-col overflow-hidden bg-[#181a20] border-gray-800/80 shadow-2xl p-4 sm:p-6">
+                      <div className="overflow-y-auto flex-1 min-h-0 pr-8 -mr-2 scrollbar-thin">
+                        <DialogHeader>
+                          <DialogTitle className="text-lg sm:text-xl flex items-center flex-wrap gap-2 text-gray-100 tracking-wide pr-2">
+                            {option.name}
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#2a2e39] text-gray-300 border border-[#3a3f4e]">
+                              {option.technology}
+                            </span>
+                          </DialogTitle>
+                          <DialogDescription className="text-[14px] sm:text-[14.5px] text-gray-400 pt-3 leading-relaxed font-light">
+                            {option.description}
+                          </DialogDescription>
+                        </DialogHeader>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
-                        <div className="rounded-xl border border-emerald-900/20 bg-[#1c1f26] p-5">
-                          <p className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-4">Pros</p>
-                          <ul className="space-y-3">
-                            {option.pros.map((pro, proIdx) => (
-                              <li key={proIdx} className="text-[14px] text-gray-300 flex items-start gap-2.5">
-                                <span className="text-emerald-500 mt-0.5 font-bold text-sm">•</span>
-                                <span className="leading-snug font-light text-gray-300/90">{pro}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                        <div className="rounded-xl border border-rose-900/20 bg-[#1c1f26] p-5">
-                          <p className="text-xs font-semibold text-rose-400 uppercase tracking-wider mb-4">Cons</p>
-                          <ul className="space-y-3">
-                            {option.cons.map((con, conIdx) => (
-                              <li key={conIdx} className="text-[14px] text-gray-300 flex items-start gap-2.5">
-                                <span className="text-rose-500 mt-0.5 font-bold text-sm">•</span>
-                                <span className="leading-snug font-light text-gray-300/90">{con}</span>
-                              </li>
-                            ))}
-                          </ul>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5 pb-2">
+                          <div className="rounded-xl border border-emerald-900/20 bg-[#1c1f26] p-4 sm:p-5">
+                            <p className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-4">Pros</p>
+                            <ul className="space-y-3">
+                              {option.pros.map((pro, proIdx) => (
+                                <li key={proIdx} className="text-[14px] text-gray-300 flex items-start gap-2.5">
+                                  <span className="text-emerald-500 mt-0.5 font-bold text-sm shrink-0">•</span>
+                                  <span className="leading-snug font-light text-gray-300/90">{pro}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                          <div className="rounded-xl border border-rose-900/20 bg-[#1c1f26] p-4 sm:p-5">
+                            <p className="text-xs font-semibold text-rose-400 uppercase tracking-wider mb-4">Cons</p>
+                            <ul className="space-y-3">
+                              {option.cons.map((con, conIdx) => (
+                                <li key={conIdx} className="text-[14px] text-gray-300 flex items-start gap-2.5">
+                                  <span className="text-rose-500 mt-0.5 font-bold text-sm shrink-0">•</span>
+                                  <span className="leading-snug font-light text-gray-300/90">{con}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
                         </div>
                       </div>
                     </DialogContent>

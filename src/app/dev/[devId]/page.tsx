@@ -218,6 +218,7 @@ const DevPage = () => {
   const [allArchitectures, setAllArchitectures] = useState<ArchitectureVersion[]>([]);
   const [selectedVersionIndex, setSelectedVersionIndex] = useState<number>(0);
   const [isVersionDropdownOpen, setIsVersionDropdownOpen] = useState(false);
+  const [showPrdNotificationDot, setShowPrdNotificationDot] = useState(false);
 
   // Derived state for stack IDs that already have architectures generated
   const generatedStackIds = React.useMemo(() => {
@@ -615,6 +616,7 @@ const DevPage = () => {
               ),
             }))
           );
+          setShowPrdNotificationDot(true);
         }
 
         const archResult = await getArchitecture(chatId);
@@ -1444,9 +1446,9 @@ const DevPage = () => {
                 <div className="flex space-x-1">
                   <button
                     onClick={() => setActiveTab('architecture')}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'architecture'
-                      ? 'text-white bg-gray-700/50'
-                      : 'text-gray-400 hover:text-white'
+                    className={`cursor-pointer px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-200 border ${activeTab === 'architecture'
+                      ? 'text-white bg-gray-700/50 border-gray-600'
+                      : 'text-gray-400 bg-gray-800/50 border-gray-700/70 hover:bg-gray-700/40 hover:text-white hover:border-gray-600'
                       }`}
                   >
                     Architecture
@@ -1454,23 +1456,34 @@ const DevPage = () => {
 
                   <button
                     onClick={() => setActiveTab('stacks')}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'stacks'
-                      ? 'text-white bg-gray-700/50'
-                      : 'text-gray-400 hover:text-white'
+                    className={`cursor-pointer px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-200 border ${activeTab === 'stacks'
+                      ? 'text-white bg-gray-700/50 border-gray-600'
+                      : 'text-gray-400 bg-gray-800/50 border-gray-700/70 hover:bg-gray-700/40 hover:text-white hover:border-gray-600'
                       }`}
                   >
                     Stack Options
                   </button>
 
-                  <button
-                    onClick={() => setActiveTab('context')}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'context'
-                      ? 'text-white bg-gray-700/50'
-                      : 'text-gray-400 hover:text-white'
-                      }`}
-                  >
-                    Docs
-                  </button>
+                  <span className="relative inline-flex">
+                    <button
+                      onClick={() => {
+                        setShowPrdNotificationDot(false);
+                        setActiveTab('context');
+                      }}
+                      className={`cursor-pointer px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-200 border ${activeTab === 'context'
+                        ? 'text-white bg-gray-700/50 border-gray-600'
+                        : 'text-gray-400 bg-gray-800/50 border-gray-700/70 hover:bg-gray-700/40 hover:text-white hover:border-gray-600'
+                        }`}
+                    >
+                      Docs
+                    </button>
+                    {showPrdNotificationDot && (
+                      <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3 items-center justify-center" aria-hidden>
+                        <span className="absolute inline-flex h-3 w-3 animate-ping rounded-full bg-red-500 opacity-75" />
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500 ring-2 ring-black" />
+                      </span>
+                    )}
+                  </span>
                 </div>
 
                 {/* Version dropdown and Fullscreen button - only show for architecture tab */}
@@ -1632,9 +1645,9 @@ const DevPage = () => {
                       setActiveTab('architecture');
                       setIsMobilePanelOpen(true);
                     }}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'architecture'
-                      ? 'text-white bg-gray-700/50'
-                      : 'text-gray-400'
+                    className={`cursor-pointer px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-200 border ${activeTab === 'architecture'
+                      ? 'text-white bg-gray-700/50 border-gray-600'
+                      : 'text-gray-400 bg-gray-800/50 border-gray-700/70 hover:bg-gray-700/40 hover:text-white hover:border-gray-600'
                       }`}
                   >
                     Architecture
@@ -1645,26 +1658,35 @@ const DevPage = () => {
                       setActiveTab('stacks');
                       setIsMobilePanelOpen(true);
                     }}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'stacks'
-                      ? 'text-white bg-gray-700/50'
-                      : 'text-gray-400'
+                    className={`cursor-pointer px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-200 border ${activeTab === 'stacks'
+                      ? 'text-white bg-gray-700/50 border-gray-600'
+                      : 'text-gray-400 bg-gray-800/50 border-gray-700/70 hover:bg-gray-700/40 hover:text-white hover:border-gray-600'
                       }`}
                   >
                     Stacks
                   </button>
 
-                  <button
-                    onClick={() => {
-                      setActiveTab('context');
-                      setIsMobilePanelOpen(true);
-                    }}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'context'
-                      ? 'text-white bg-gray-700/50'
-                      : 'text-gray-400'
-                      }`}
-                  >
-                    Docs
-                  </button>
+                  <span className="relative inline-flex">
+                    <button
+                      onClick={() => {
+                        setShowPrdNotificationDot(false);
+                        setActiveTab('context');
+                        setIsMobilePanelOpen(true);
+                      }}
+                      className={`cursor-pointer px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-200 border ${activeTab === 'context'
+                        ? 'text-white bg-gray-700/50 border-gray-600'
+                        : 'text-gray-400 bg-gray-800/50 border-gray-700/70 hover:bg-gray-700/40 hover:text-white hover:border-gray-600'
+                        }`}
+                    >
+                      Docs
+                    </button>
+                    {showPrdNotificationDot && (
+                      <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3 items-center justify-center" aria-hidden>
+                        <span className="absolute inline-flex h-3 w-3 animate-ping rounded-full bg-red-500 opacity-75" />
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500 ring-2 ring-black" />
+                      </span>
+                    )}
+                  </span>
                 </div>
 
                 {/* Expand button */}
@@ -1697,9 +1719,9 @@ const DevPage = () => {
                 <div className="flex space-x-2">
                   <button
                     onClick={() => setActiveTab('architecture')}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'architecture'
-                      ? 'text-white bg-gray-700/50'
-                      : 'text-gray-400'
+                    className={`cursor-pointer px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-200 border ${activeTab === 'architecture'
+                      ? 'text-white bg-gray-700/50 border-gray-600'
+                      : 'text-gray-400 bg-gray-800/50 border-gray-700/70 hover:bg-gray-700/40 hover:text-white hover:border-gray-600'
                       }`}
                   >
                     Architecture
@@ -1707,23 +1729,34 @@ const DevPage = () => {
 
                   <button
                     onClick={() => setActiveTab('stacks')}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'stacks'
-                      ? 'text-white bg-gray-700/50'
-                      : 'text-gray-400'
+                    className={`cursor-pointer px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-200 border ${activeTab === 'stacks'
+                      ? 'text-white bg-gray-700/50 border-gray-600'
+                      : 'text-gray-400 bg-gray-800/50 border-gray-700/70 hover:bg-gray-700/40 hover:text-white hover:border-gray-600'
                       }`}
                   >
                     Stack Options
                   </button>
 
-                  <button
-                    onClick={() => setActiveTab('context')}
-                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'context'
-                      ? 'text-white bg-gray-700/50'
-                      : 'text-gray-400'
-                      }`}
-                  >
-                    Docs
-                  </button>
+                  <span className="relative inline-flex">
+                    <button
+                      onClick={() => {
+                        setShowPrdNotificationDot(false);
+                        setActiveTab('context');
+                      }}
+                      className={`cursor-pointer px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-200 border ${activeTab === 'context'
+                        ? 'text-white bg-gray-700/50 border-gray-600'
+                        : 'text-gray-400 bg-gray-800/50 border-gray-700/70 hover:bg-gray-700/40 hover:text-white hover:border-gray-600'
+                        }`}
+                    >
+                      Docs
+                    </button>
+                    {showPrdNotificationDot && (
+                      <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3 items-center justify-center" aria-hidden>
+                        <span className="absolute inline-flex h-3 w-3 animate-ping rounded-full bg-red-500 opacity-75" />
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500 ring-2 ring-black" />
+                      </span>
+                    )}
+                  </span>
                 </div>
 
                 <div className="flex items-center space-x-2">
