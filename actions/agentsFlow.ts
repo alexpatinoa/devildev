@@ -12,6 +12,8 @@ import { TokenUsageCallbackHandler } from "../common/TokenUsageHandler";
 import { TERMINATING_TOOLS, TerminatingTools } from "../types/pToA/tools";
 import { tier1Tool } from "../tools/ptoA-tools/tier-1";
 import { tier2Tool } from "../tools/ptoA-tools/tier-2";
+import { DynamicStructuredTool } from "langchain/tools";
+import { z } from "zod";
 
 // Return type for agent flow functions
 export type AgentFlowResult = {
@@ -132,21 +134,30 @@ export async function chatbot(userInput: string, conversationHistory: any[] = []
 
 export async function architectureModificationBot(userInput: string, conversationHistory: any[] = [], architectureData: any, userId: string | null = null) {
     // Check credits before running the agent
-    if (userId) {
+    if (userId) { 
         const creditsResult = await getCredits(userId);
         if (creditsResult.success && creditsResult.credits !== undefined && creditsResult.credits < minSoulsToSendMessage) {
             return { error: 'INSUFFICIENT_CREDITS', remainingCredits: creditsResult.credits };
         }
     }
 
-    const template = architectureModificationPrompt;
+    const get_architecture = new DynamicStructuredTool({
+        name: "get_architecture",
+        description:
+          "Use this when you really need to inspect the current architecture. It returns the full architecture JSON as a string.",
+        schema: z.object({}), // no inputs needed
+        func: async (): Promise<string> => {
+          // NO DB CALL – uses the value passed into this function
+          return JSON.stringify(architectureData);
+        },
+      });
 
     // Format conversation history for the prompt
     const formattedHistory = conversationHistory.map(msg => 
         `${msg.type === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
-    ).join('\n');
+    ).join('\n'); 
 
-    const prompt = PromptTemplate.fromTemplate(template);
+    const prompt = PromptTemplate.fromTemplate(architectureModificationPrompt);
     const chain = prompt.pipe(llm);
     const result = await chain.invoke({
         userInput: userInput,
