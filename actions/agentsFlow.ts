@@ -1,10 +1,9 @@
 "use server";
 import { ChatOpenAI } from "@langchain/openai";
-import { ChatPromptTemplate, HumanMessagePromptTemplate, MessagesPlaceholder, PromptTemplate } from "@langchain/core/prompts";
-import { architectureModificationPrompt, BASE_DEVILDEV_AGENT_PROMPT, DevilDevAgentAfterInterviewRole, DevilDevAgentBeforeInterviewRole } from "../prompts/dev/Chatbot";
+import { ChatPromptTemplate, HumanMessagePromptTemplate, MessagesPlaceholder } from "@langchain/core/prompts";
+import { architectureModificationAgentPrompt, BASE_DEVILDEV_AGENT_PROMPT, DevilDevAgentAfterInterviewRole, DevilDevAgentBeforeInterviewRole } from "../prompts/dev/Chatbot";
 import { deductCredits, getCredits } from "./credits";
 import { minSoulsToSendMessage } from "../Limits";
-import { extractTextContent } from "@/lib/ai/extractTextContent";
 import { interviewTool } from "../tools/ptoA-tools/interview";
 import { generalResTool } from "../tools/ptoA-tools/general_res";
 import { AgentExecutor, createToolCallingAgent } from "langchain/agents";
@@ -12,6 +11,7 @@ import { TokenUsageCallbackHandler } from "../common/TokenUsageHandler";
 import { TERMINATING_TOOLS, TerminatingTools } from "../types/pToA/tools";
 import { tier1Tool } from "../tools/ptoA-tools/tier-1";
 import { tier2Tool } from "../tools/ptoA-tools/tier-2";
+import { updateArchitectureTool } from "../tools/ptoA-tools/update_architecture";
 import { DynamicStructuredTool } from "langchain/tools";
 import { z } from "zod";
 
@@ -141,51 +141,89 @@ export async function architectureModificationBot(userInput: string, conversatio
         }
     }
 
+    // Format conversation history for the prompt
+    const formattedHistory = conversationHistory.map(msg =>
+        `${msg.type === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
+    ).join('\n');
+
     const get_architecture = new DynamicStructuredTool({
         name: "get_architecture",
         description:
-          "Use this when you really need to inspect the current architecture. It returns the full architecture JSON as a string.",
-        schema: z.object({}), // no inputs needed
+            "Use this when you need to inspect the current architecture. It returns the full architecture JSON as a string. This does NOT close the agent.",
+        schema: z.object({}),
         func: async (): Promise<string> => {
-          // NO DB CALL – uses the value passed into this function
-          return JSON.stringify(architectureData);
+            return JSON.stringify(architectureData);
         },
-      });
-
-    // Format conversation history for the prompt
-    const formattedHistory = conversationHistory.map(msg => 
-        `${msg.type === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
-    ).join('\n'); 
-
-    const prompt = PromptTemplate.fromTemplate(architectureModificationPrompt);
-    const chain = prompt.pipe(llm);
-    const result = await chain.invoke({
-        userInput: userInput,
-        conversationHistory: formattedHistory,
-        architecture_data: JSON.stringify(architectureData)
     });
-    
-    // Extract text content - handle both string and complex content types
-    const textContent = extractTextContent(result.content);
-    
-    // Deduct credits if userId is provided
+
+    const tools = [get_architecture, generalResTool, interviewTool, updateArchitectureTool];
+
+    const prompt = ChatPromptTemplate.fromMessages([
+        ["system", architectureModificationAgentPrompt],
+        HumanMessagePromptTemplate.fromTemplate("{userInput}"),
+        new MessagesPlaceholder("agent_scratchpad"),
+    ]);
+
+    const agent = await createToolCallingAgent({ llm, tools, prompt });
+
+    const agentExecutor = new AgentExecutor({
+        agent,
+        tools,
+        verbose: true,
+        maxIterations: 10,
+    });
+
+    const inputs = {
+        userInput,
+        conversationHistory: formattedHistory,
+    };
+
+    const tokenUsageHandler = new TokenUsageCallbackHandler();
+
+    const stream = (agentExecutor as any)._streamIterator(inputs, { callbacks: [tokenUsageHandler] });
+
+    let result: { output?: string; terminatingTool?: TerminatingTools } | undefined;
+
+    for await (const step of stream) {
+        if (!step) continue;
+
+        if (step.output !== undefined) {
+            result = { output: step.output, terminatingTool: step.terminatingTool };
+            break;
+        }
+
+        const steps = step.intermediateSteps as Array<{ action: { tool: string }; observation: string }> | undefined;
+        if (steps?.length) {
+            const last = steps[steps.length - 1];
+            const toolName = last?.action?.tool?.toLowerCase();
+            if (toolName && TERMINATING_TOOLS.has(toolName)) {
+                result = { output: last.observation, terminatingTool: toolName as TerminatingTools };
+                break;
+            }
+        }
+    }
+
+    console.log("architectureModificationBot result:", result);
+    const tokenUsage = tokenUsageHandler.getUsage();
+
     if (userId) {
-        const inputTokens = result.usage_metadata?.input_tokens ?? 0;
-        const outputTokens = result.usage_metadata?.output_tokens ?? 0;
-        
-        const creditResult = await deductCredits(userId, inputTokens, outputTokens);
+        const inputTokens = tokenUsage.inputTokens;
+        const outputTokens = tokenUsage.outputTokens;
+
+        const creditResult = await deductCredits(userId, inputTokens, outputTokens, true);
         if (!creditResult.success) {
             console.error("Failed to deduct credits:", creditResult.error);
-            return { textContent };
+            return { response: result?.output, terminatingTool: result?.terminatingTool };
         } else {
             console.log(`Credits deducted: ${creditResult.deducted}, remaining: ${creditResult.remaining}`);
             return {
-                textContent,
+                response: result?.output,
+                terminatingTool: result?.terminatingTool,
                 remainingCredits: creditResult.remaining,
                 deducted: creditResult.deducted
             };
         }
     }
-    
-    return { textContent };
+
+    return { response: result?.output, terminatingTool: result?.terminatingTool };
 }

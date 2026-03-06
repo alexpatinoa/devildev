@@ -2,10 +2,11 @@ export enum TerminatingTools {
     INTERVIEW_USER = "interview_user",
     GENERAL_RESPONSE = "general_response",
     TIER_1 = "tier_1",
-    TIER_2 = "tier_2"
+    TIER_2 = "tier_2",
+    UPDATE_ARCHITECTURE = "update_architecture",
 }
 
-export const TERMINATING_TOOLS = new Set(["interview_user", "general_response", "tier_1", "tier_2"]);
+export const TERMINATING_TOOLS = new Set(["interview_user", "general_response", "tier_1", "tier_2", "update_architecture"]);
 
 /** Parsed output from general_response tool */
 export interface GeneralResponsePayload {
@@ -41,4 +42,10 @@ export interface Tier1Payload {
 export interface Tier2Payload {
     response: string;
     context: string;
+}
+
+/** Parsed output from update_architecture tool */
+export interface UpdateArchitecturePayload {
+    response: string;
+    changeRequirement: string;
 }

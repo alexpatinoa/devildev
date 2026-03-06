@@ -8,7 +8,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import SoulCount from '../../../components/core/SoulCount';
 import { ChatMessageList, ChatInput } from '@/components/Dev';
 import { chatbot, architectureModificationBot } from '../../../../actions/agentsFlow';
-import { TerminatingTools, GeneralResponsePayload, InterviewPayload, Tier1Payload, Tier2Payload, type InterviewAnswer, type InterviewQuestion } from '../../../../types/pToA/tools';
+import { TerminatingTools, GeneralResponsePayload, InterviewPayload, Tier1Payload, Tier2Payload, UpdateArchitecturePayload, type InterviewAnswer, type InterviewQuestion } from '../../../../types/pToA/tools';
 import { submitFeedback } from '../../../../actions/feedback';
 import { notifyCreditsUpdate, refetchCredits } from '@/lib/credits-events';
 import { generateMainArchitecture, triggerArchitectureGeneration } from '../../../../actions/architecture';
@@ -156,7 +156,7 @@ const safeJsonParse = (jsonString: string | any): any => {
 function parseChatbotResult(
   response: string | undefined,
   terminatingTool: TerminatingTools | string | undefined
-): { kind: 'general_response'; payload: GeneralResponsePayload } | { kind: 'interview_user'; payload: InterviewPayload } | { kind: 'tier_1'; payload: Tier1Payload } | { kind: 'tier_2'; payload: Tier2Payload } | { kind: 'plain'; text: string } | null {
+): { kind: 'general_response'; payload: GeneralResponsePayload } | { kind: 'interview_user'; payload: InterviewPayload } | { kind: 'tier_1'; payload: Tier1Payload } | { kind: 'tier_2'; payload: Tier2Payload } | { kind: 'update_architecture'; payload: UpdateArchitecturePayload } | { kind: 'plain'; text: string } | null {
   if (response == null || response === '') return null;
   const tool = terminatingTool?.toLowerCase?.() ?? terminatingTool;
   if (tool === TerminatingTools.GENERAL_RESPONSE || tool === 'general_response') {
@@ -174,6 +174,10 @@ function parseChatbotResult(
   if (tool === TerminatingTools.TIER_2 || tool === 'tier_2') {
     const payload = JSON.parse(response) as Tier2Payload;
     return { kind: 'tier_2', payload };
+  }
+  if (tool === TerminatingTools.UPDATE_ARCHITECTURE || tool === 'update_architecture') {
+    const payload = JSON.parse(response) as UpdateArchitecturePayload;
+    return { kind: 'update_architecture', payload };
   }
   return { kind: 'plain', text: response };
 }
@@ -817,8 +821,10 @@ const DevPage = () => {
       } else if (parsed.kind === 'tier_2') {
         content = parsed.payload.response;
         tier2Context = parsed.payload.context;
-      } else {
+      } else if (parsed.kind === 'plain') {
         content = parsed.text;
+      } else {
+        content = '';
       }
 
       const assistantMessage: ChatMessageType = {
@@ -901,29 +907,122 @@ const DevPage = () => {
     const messagesForApi = updated.map((m, i) =>
       i === idx ? { ...m, content: answersContent } : m
     );
-    await processChatbotResponse(
-      'I have completed the interview.',
-      messagesForApi,
-      updated,
-      {
-        isInterviewed: true,
-        onError: async (messagesWithUser) => {
-          const errorMessage: ChatMessageType = {
-            id: (Date.now() + 1).toString(),
+
+    if (architectureData) {
+      try {
+        const result = await architectureModificationBot('I have completed the interview.', messagesForApi, architectureData, user?.id ?? null);
+
+        if (typeof result === 'object' && result.error === 'INSUFFICIENT_CREDITS') {
+          if (result.remainingCredits !== undefined) notifyCreditsUpdate(result.remainingCredits);
+          setShowLowSoulsDialog(true);
+          const assistantMessage: ChatMessageType = {
+            id: Date.now().toString(),
             type: 'assistant',
-            content: 'Sorry, I encountered an error while processing your request. Please try again.',
+            content: 'Your souls count is low. Please upgrade or buy more souls to continue.',
             timestamp: new Date().toISOString()
           };
-          const finalMessages = [...messagesWithUser, errorMessage];
-          setMessages(finalMessages);
-          try {
-            await addMessageToChat(chatId, errorMessage);
-          } catch (saveError) {
-            console.error('Error saving error message:', saveError);
+          const updatedMessages = [...updated, assistantMessage];
+          setMessages(updatedMessages);
+          setIsLoading(false);
+          await updateChatMessages(chatId, updatedMessages);
+          return;
+        }
+
+        if (typeof result === 'object' && result.remainingCredits !== undefined) {
+          notifyCreditsUpdate(result.remainingCredits);
+        }
+
+        const response = typeof result === 'object' ? result?.response : undefined;
+        const terminatingTool = typeof result === 'object' ? result?.terminatingTool : undefined;
+        const parsed = parseChatbotResult(response, terminatingTool);
+
+        if (parsed === null) { setIsLoading(false); return; }
+
+        if (parsed.kind === 'update_architecture') {
+          const assistantMessage: ChatMessageType = {
+            id: Date.now().toString(),
+            type: 'assistant',
+            content: parsed.payload.response,
+            timestamp: new Date().toISOString()
+          };
+          const updatedMessages = [...updated, assistantMessage];
+          setMessages(updatedMessages);
+          setIsLoading(false);
+          await updateChatMessages(chatId, updatedMessages);
+          await genArchitecture(parsed.payload.changeRequirement, updated);
+        } else if (parsed.kind === 'interview_user') {
+          const assistantMessage: ChatMessageType = {
+            id: Date.now().toString(),
+            type: 'assistant',
+            content: 'Answer the questions below.',
+            timestamp: new Date().toISOString(),
+            interviewPayload: parsed.payload,
+          };
+          const updatedMessages = [...updated, assistantMessage];
+          setMessages(updatedMessages);
+          setIsLoading(false);
+          await updateChatMessages(chatId, updatedMessages);
+        } else if (parsed.kind === 'general_response') {
+          const assistantMessage: ChatMessageType = {
+            id: Date.now().toString(),
+            type: 'assistant',
+            content: parsed.payload.response,
+            timestamp: new Date().toISOString()
+          };
+          const updatedMessages = [...updated, assistantMessage];
+          setMessages(updatedMessages);
+          setIsLoading(false);
+          await updateChatMessages(chatId, updatedMessages);
+        } else {
+          const content = parsed.kind === 'plain' ? parsed.text : '';
+          const assistantMessage: ChatMessageType = {
+            id: Date.now().toString(),
+            type: 'assistant',
+            content,
+            timestamp: new Date().toISOString()
+          };
+          const updatedMessages = [...updated, assistantMessage];
+          setMessages(updatedMessages);
+          setIsLoading(false);
+          await updateChatMessages(chatId, updatedMessages);
+        }
+      } catch (error) {
+        console.error('Error processing architecture modification after interview:', error);
+        const errorMessage: ChatMessageType = {
+          id: (Date.now() + 1).toString(),
+          type: 'assistant',
+          content: 'Sorry, I encountered an error while processing your request. Please try again.',
+          timestamp: new Date().toISOString()
+        };
+        setMessages((prev) => [...prev, errorMessage]);
+        try { await addMessageToChat(chatId, errorMessage); } catch {}
+        setIsLoading(false);
+      }
+    } else {
+      await processChatbotResponse(
+        'I have completed the interview.',
+        messagesForApi,
+        updated,
+        {
+          isInterviewed: true,
+          onError: async (messagesWithUser) => {
+            const errorMessage: ChatMessageType = {
+              id: (Date.now() + 1).toString(),
+              type: 'assistant',
+              content: 'Sorry, I encountered an error while processing your request. Please try again.',
+              timestamp: new Date().toISOString()
+            };
+            const finalMessages = [...messagesWithUser, errorMessage];
+            setMessages(finalMessages);
+            try {
+              await addMessageToChat(chatId, errorMessage);
+            } catch (saveError) {
+              console.error('Error saving error message:', saveError);
+            }
           }
         }
-      }
-    );
+      );
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -983,27 +1082,63 @@ const DevPage = () => {
           notifyCreditsUpdate(result.remainingCredits);
         }
 
-        const chatbotResponse = typeof result === 'string' ? result : result.textContent;
-        const parsedClassifier = safeJsonParse(chatbotResponse);
+        const response = typeof result === 'object' ? result?.response : undefined;
+        const terminatingTool = typeof result === 'object' ? result?.terminatingTool : undefined;
+        const parsed = parseChatbotResult(response, terminatingTool);
 
-        setCurrentStartOrNot(parsedClassifier.is_change);
-        if (parsedClassifier.is_change) {
+        if (parsed === null) {
+          setIsLoading(false);
+          return;
+        }
+
+        let content: string;
+        let interviewPayload: ChatMessageType['interviewPayload'];
+
+        if (parsed.kind === 'update_architecture') {
+          content = parsed.payload.response;
           const assistantMessage: ChatMessageType = {
             id: Date.now().toString(),
             type: 'assistant',
-            content: parsedClassifier.verification,
+            content,
             timestamp: new Date().toISOString()
           };
           const updatedMessages = [...updatedMessagesWithUser, assistantMessage];
           setMessages(updatedMessages);
           setIsLoading(false);
-          await genArchitecture(currentInput, messages);
           await updateChatMessages(chatId, updatedMessages);
-        } else {
+          await genArchitecture(parsed.payload.changeRequirement, messages);
+        } else if (parsed.kind === 'interview_user') {
+          content = 'Answer the questions below.';
+          interviewPayload = parsed.payload;
           const assistantMessage: ChatMessageType = {
             id: Date.now().toString(),
             type: 'assistant',
-            content: parsedClassifier.general,
+            content,
+            timestamp: new Date().toISOString(),
+            interviewPayload,
+          };
+          const updatedMessages = [...updatedMessagesWithUser, assistantMessage];
+          setMessages(updatedMessages);
+          setIsLoading(false);
+          await updateChatMessages(chatId, updatedMessages);
+        } else if (parsed.kind === 'general_response') {
+          content = parsed.payload.response;
+          const assistantMessage: ChatMessageType = {
+            id: Date.now().toString(),
+            type: 'assistant',
+            content,
+            timestamp: new Date().toISOString()
+          };
+          const updatedMessages = [...updatedMessagesWithUser, assistantMessage];
+          setMessages(updatedMessages);
+          setIsLoading(false);
+          await updateChatMessages(chatId, updatedMessages);
+        } else {
+          content = parsed.kind === 'plain' ? parsed.text : '';
+          const assistantMessage: ChatMessageType = {
+            id: Date.now().toString(),
+            type: 'assistant',
+            content,
             timestamp: new Date().toISOString()
           };
           const updatedMessages = [...updatedMessagesWithUser, assistantMessage];
