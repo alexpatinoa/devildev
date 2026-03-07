@@ -34,16 +34,33 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-600 hover:scrollbar-thumb-gray-500">
       {messages.map((message) => (
-        <div key={message.id} className={`flex ${message.type === 'user' ? 'justify-start' : 'justify-start'}`}>
-          <ChatMessage
-            message={message}
-            index={messages.indexOf(message)}
-            userImageUrl={userImageUrl}
-            userInitial={userInitial}
-            onInterviewComplete={onInterviewComplete}
-          />
-        </div>
-      ))} 
+        <React.Fragment key={message.id}>
+          <div className={`flex ${message.type === 'user' ? 'justify-start' : 'justify-start'}`}>
+            <ChatMessage
+              message={message}
+              index={messages.indexOf(message)}
+              userImageUrl={userImageUrl}
+              userInitial={userInitial}
+              onInterviewComplete={onInterviewComplete}
+            />
+          </div>
+          {message.tier2Context && showOptionsButton && !isLoading && (
+            <div className="flex h-12 ml-10 relative">
+              <button
+                onClick={onViewOptions}
+                className={`px-6 py-2 border rounded-lg font-bold cursor-pointer transition-colors duration-200 ${
+                  isOptionsLoading
+                    ? "bg-yellow-600 border-yellow-600 text-white cursor-not-allowed"
+                    : "hover:bg-transparent border-white hover:text-white bg-white text-black"
+                }`}
+                disabled={isOptionsLoading}
+              >
+                {isOptionsLoading ? "Preparing Options..." : "View Options→"}
+              </button>
+            </div>
+          )}
+        </React.Fragment>
+      ))}
       
       {/* Loading indicator */}
       {isLoading && (
@@ -112,21 +129,6 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
               >.</span>
             </span>
           </div>
-        </div>
-      )}
-      {showOptionsButton && !isLoading && (
-        <div className="flex h-12 ml-10 relative">
-          <button
-            onClick={onViewOptions}
-            className={`px-6 py-2 border rounded-lg font-bold cursor-pointer transition-colors duration-200 ${
-              isOptionsLoading
-                ? "bg-yellow-600 border-yellow-600 text-white cursor-not-allowed"
-                : "hover:bg-transparent border-white hover:text-white bg-white text-black"
-            }`}
-            disabled={isOptionsLoading}
-          >
-            {isOptionsLoading ? "Preparing Options..." : "View Options→"}
-          </button>
         </div>
       )}
       

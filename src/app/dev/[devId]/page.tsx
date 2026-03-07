@@ -8,16 +8,15 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import SoulCount from '../../../components/core/SoulCount';
 import { ChatMessageList, ChatInput } from '@/components/Dev';
 import { chatbot, architectureModificationBot } from '../../../../actions/agentsFlow';
-import { TerminatingTools, GeneralResponsePayload, InterviewPayload, Tier1Payload, Tier2Payload, type InterviewAnswer, type InterviewQuestion } from '../../../../types/pToA/tools';
+import { TerminatingTools, GeneralResponsePayload, InterviewPayload, Tier1Payload, Tier2Payload, UpdateArchitecturePayload, type InterviewAnswer, type InterviewQuestion } from '../../../../types/pToA/tools';
 import { submitFeedback } from '../../../../actions/feedback';
-import { notifyCreditsUpdate, refetchCredits } from '@/lib/credits-events';
-import { generateMainArchitecture, triggerArchitectureGeneration } from '../../../../actions/architecture';
+import { notifyCreditsUpdate } from '@/lib/credits-events';
+import { generateMainArchitecture, updateArchitecture } from '../../../../actions/architecture';
 import { getChat, addMessageToChat, updateChatMessages, createChatWithId, ChatMessage as ChatMessageType, getUserChats } from '../../../../actions/chat';
 import { createArchOptionsFromTier2, getArchOptionsHistory } from '../../../../actions/archOptions';
 import {
   getArchitecture,
   updateComponentPositionsDebounced,
-  checkArchitectureById,
   ArchitectureData,
   ComponentPosition
 } from '../../../../actions/architecturePersistence';
@@ -156,7 +155,7 @@ const safeJsonParse = (jsonString: string | any): any => {
 function parseChatbotResult(
   response: string | undefined,
   terminatingTool: TerminatingTools | string | undefined
-): { kind: 'general_response'; payload: GeneralResponsePayload } | { kind: 'interview_user'; payload: InterviewPayload } | { kind: 'tier_1'; payload: Tier1Payload } | { kind: 'tier_2'; payload: Tier2Payload } | { kind: 'plain'; text: string } | null {
+): { kind: 'general_response'; payload: GeneralResponsePayload } | { kind: 'interview_user'; payload: InterviewPayload } | { kind: 'tier_1'; payload: Tier1Payload } | { kind: 'tier_2'; payload: Tier2Payload } | { kind: 'update_architecture'; payload: UpdateArchitecturePayload } | { kind: 'plain'; text: string } | null {
   if (response == null || response === '') return null;
   const tool = terminatingTool?.toLowerCase?.() ?? terminatingTool;
   if (tool === TerminatingTools.GENERAL_RESPONSE || tool === 'general_response') {
@@ -174,6 +173,10 @@ function parseChatbotResult(
   if (tool === TerminatingTools.TIER_2 || tool === 'tier_2') {
     const payload = JSON.parse(response) as Tier2Payload;
     return { kind: 'tier_2', payload };
+  }
+  if (tool === TerminatingTools.UPDATE_ARCHITECTURE || tool === 'update_architecture') {
+    const payload = JSON.parse(response) as UpdateArchitecturePayload;
+    return { kind: 'update_architecture', payload };
   }
   return { kind: 'plain', text: response };
 }
@@ -652,114 +655,156 @@ const DevPage = () => {
     }
   };
 
-  // Function to generate architecture
-  const genArchitecture = async (requirement: string, conversationHistory: any[] = []) => {
+  const genArchitecture = async (requirement: string) => {
+    if (!user?.id) return;
 
     setIsArchitectureLoading(true);
-
-    if (isMobile) {
-      setIsMobilePanelOpen(true);
-    }
+    if (isMobile) setIsMobilePanelOpen(true);
 
     try {
-      if (user?.id) {
-        const generationId = crypto.randomUUID();
+      const currentStackId = allArchitectures[selectedVersionIndex]?.metadata?.stackId ?? undefined;
 
-        const result = await triggerArchitectureGeneration({
-          generationId,
-          requirement,
-          conversationHistory,
-          architectureData,
-          chatId,
-          componentPositions,
-          userId: user.id,
-        });
+      const result = await updateArchitecture({
+        changeRequirement: requirement,
+        chatId,
+        stackId: currentStackId,
+        architecture_data: architectureData,
+        userId: user.id,
+      });
 
-        if (result.success) {
-          // Start polling for the architecture
-          pollForArchitecture(generationId);
-        } else if (result.error === 'INSUFFICIENT_CREDITS') {
-          if (result.remainingCredits !== undefined) {
-            notifyCreditsUpdate(result.remainingCredits);
-          }
-          setShowLowSoulsDialog(true);
-          setIsArchitectureLoading(false);
-        } else {
-          console.error('Failed to trigger architecture generation:', result.error);
-          setIsArchitectureLoading(false);
-        }
+      if (result.success && result.architecture) {
+        if (result.creditsRemaining !== undefined) notifyCreditsUpdate(result.creditsRemaining);
+
+        const newArch = result.architecture as unknown as ArchitectureData;
+        setArchitectureData(newArch);
+        setComponentPositions({});
+        setAllArchitectures(prev => [...prev, {
+          architecture: newArch,
+          componentPositions: {},
+          metadata: {
+            id: result.architecture.id,
+            requirement: result.architecture.requirement ?? null,
+            generatedAt: result.architecture.generatedAt,
+            lastPositionUpdate: result.architecture.lastPositionUpdate,
+            createdAt: result.architecture.createdAt,
+            updatedAt: result.architecture.updatedAt,
+            stackId: result.architecture.stackId ?? null,
+          },
+        }]);
+        setSelectedVersionIndex(prev => prev + 1);
+        setArchitectureGenerated(true);
+      } else if (result.error === 'INSUFFICIENT_CREDITS') {
+        if (result.remainingCredits !== undefined) notifyCreditsUpdate(result.remainingCredits);
+        setShowLowSoulsDialog(true);
+      } else {
+        console.error('Failed to update architecture:', result.error);
       }
     } catch (error) {
-      console.error('Error generating architecture:', error);
+      console.error('Error updating architecture:', error);
+    } finally {
       setIsArchitectureLoading(false);
     }
   };
 
-  // Function to poll for architecture completion
-  const pollForArchitecture = async (generationId: string) => {
-    const maxAttempts = 120; // Poll for up to 10 minutes total
-    let attempts = 0;
-    const initialPhaseDuration = 4 * 60 * 1000; // 4 minutes in milliseconds
-    const initialPollInterval = 15 * 1000; // 15 seconds for first 4 minutes
-    const finalPollInterval = 5 * 1000; // 5 seconds after 4 minutes
-    const startTime = Date.now();
+  // Shared logic: call architectureModificationBot, handle credits/parse/assistant message, update state and DB.
+  const processArchModBotResponse = async (
+    userMessage: string,
+    messagesForApi: ChatMessageType[],
+    messagesWithUserMessage: ChatMessageType[]
+  ): Promise<void> => {
+    try {
+      const result = await architectureModificationBot(userMessage, messagesForApi, architectureData, user?.id ?? null);
 
-    const poll = async () => {
-      try {
-        attempts++;
-        const elapsedTime = Date.now() - startTime;
-        const isInitialPhase = elapsedTime < initialPhaseDuration;
-        const currentInterval = isInitialPhase ? initialPollInterval : finalPollInterval;
-
-        const result = await checkArchitectureById(generationId);
-
-        if (result.success && result.exists && result.architecture) {
-          // Architecture found! Update the state
-
-          // Reload all architectures to get the updated list
-          const archResult = await getArchitecture(chatId);
-          if (archResult.success && archResult.architectures && archResult.architectures.length > 0) {
-            setAllArchitectures(archResult.architectures);
-
-            // Set the latest architecture as the selected one
-            const latestIndex = archResult.architectures.length - 1;
-            setSelectedVersionIndex(latestIndex);
-            setArchitectureData(archResult.architectures[latestIndex].architecture);
-            setComponentPositions(archResult.architectures[latestIndex].componentPositions || {});
-          } else {
-            // Fallback to the result architecture if reload fails
-            setArchitectureData(result.architecture);
-            setComponentPositions(result.componentPositions || {});
-          }
-
-          setArchitectureGenerated(true);
-          setIsArchitectureLoading(false);
-
-          // Refetch credits after background job completes
-          if (user?.id) {
-            await refetchCredits(user.id);
-          }
-
-          return;
-        }
-
-        if (attempts >= maxAttempts) {
-          console.error("Polling timeout: Architecture not found after maximum attempts");
-          setIsArchitectureLoading(false);
-          return;
-        }
-
-        // Continue polling with appropriate interval
-        setTimeout(poll, currentInterval);
-
-      } catch (error) {
-        console.error("Error polling for architecture:", error);
-        setIsArchitectureLoading(false);
+      if (typeof result === 'object' && result.error === 'INSUFFICIENT_CREDITS') {
+        if (result.remainingCredits !== undefined) notifyCreditsUpdate(result.remainingCredits);
+        setShowLowSoulsDialog(true);
+        const assistantMessage: ChatMessageType = {
+          id: Date.now().toString(),
+          type: 'assistant',
+          content: 'Your souls count is low. Please upgrade or buy more souls to continue.',
+          timestamp: new Date().toISOString()
+        };
+        const updatedMessages = [...messagesWithUserMessage, assistantMessage];
+        setMessages(updatedMessages);
+        setIsLoading(false);
+        await updateChatMessages(chatId, updatedMessages);
+        return;
       }
-    };
 
-    // Start polling
-    poll();
+      if (typeof result === 'object' && result.remainingCredits !== undefined) {
+        notifyCreditsUpdate(result.remainingCredits);
+      }
+
+      const response = typeof result === 'object' ? result?.response : undefined;
+      const terminatingTool = typeof result === 'object' ? result?.terminatingTool : undefined;
+      const parsed = parseChatbotResult(response, terminatingTool);
+
+      if (parsed === null) { setIsLoading(false); return; }
+
+      if (parsed.kind === 'update_architecture') {
+        const assistantMessage: ChatMessageType = {
+          id: Date.now().toString(),
+          type: 'assistant',
+          content: parsed.payload.response,
+          timestamp: new Date().toISOString(),
+          changeRequirement: parsed.payload.changeRequirement,
+        };
+        const updatedMessages = [...messagesWithUserMessage, assistantMessage];
+        setMessages(updatedMessages);
+        setIsLoading(false);
+        await updateChatMessages(chatId, updatedMessages);
+        await genArchitecture(parsed.payload.changeRequirement);
+      } else if (parsed.kind === 'interview_user') {
+        const assistantMessage: ChatMessageType = {
+          id: Date.now().toString(),
+          type: 'assistant',
+          content: 'Answer the questions below.',
+          timestamp: new Date().toISOString(),
+          interviewPayload: parsed.payload,
+        };
+        const updatedMessages = [...messagesWithUserMessage, assistantMessage];
+        setMessages(updatedMessages);
+        setIsLoading(false);
+        await updateChatMessages(chatId, updatedMessages);
+      } else if (parsed.kind === 'general_response') {
+        const assistantMessage: ChatMessageType = {
+          id: Date.now().toString(),
+          type: 'assistant',
+          content: parsed.payload.response,
+          timestamp: new Date().toISOString()
+        };
+        const updatedMessages = [...messagesWithUserMessage, assistantMessage];
+        setMessages(updatedMessages);
+        setIsLoading(false);
+        await updateChatMessages(chatId, updatedMessages);
+      } else {
+        const content = parsed.kind === 'plain' ? parsed.text : '';
+        const assistantMessage: ChatMessageType = {
+          id: Date.now().toString(),
+          type: 'assistant',
+          content,
+          timestamp: new Date().toISOString()
+        };
+        const updatedMessages = [...messagesWithUserMessage, assistantMessage];
+        setMessages(updatedMessages);
+        setIsLoading(false);
+        await updateChatMessages(chatId, updatedMessages);
+      }
+    } catch (error) {
+      console.error('Error processing architecture modification:', error);
+      const errorMessage: ChatMessageType = {
+        id: (Date.now() + 1).toString(),
+        type: 'assistant',
+        content: 'Sorry, I encountered an error while processing your request. Please try again.',
+        timestamp: new Date().toISOString()
+      };
+      const finalMessages = [...messagesWithUserMessage, errorMessage];
+      setMessages(finalMessages);
+      try { await addMessageToChat(chatId, errorMessage); } catch (saveError) {
+        console.error('Error saving error message:', saveError);
+      }
+      setIsLoading(false);
+    }
   };
 
   // Shared logic: call chatbot, handle credits/parse/assistant message, update state and DB.
@@ -817,8 +862,10 @@ const DevPage = () => {
       } else if (parsed.kind === 'tier_2') {
         content = parsed.payload.response;
         tier2Context = parsed.payload.context;
-      } else {
+      } else if (parsed.kind === 'plain') {
         content = parsed.text;
+      } else {
+        content = '';
       }
 
       const assistantMessage: ChatMessageType = {
@@ -901,29 +948,34 @@ const DevPage = () => {
     const messagesForApi = updated.map((m, i) =>
       i === idx ? { ...m, content: answersContent } : m
     );
-    await processChatbotResponse(
-      'I have completed the interview.',
-      messagesForApi,
-      updated,
-      {
-        isInterviewed: true,
-        onError: async (messagesWithUser) => {
-          const errorMessage: ChatMessageType = {
-            id: (Date.now() + 1).toString(),
-            type: 'assistant',
-            content: 'Sorry, I encountered an error while processing your request. Please try again.',
-            timestamp: new Date().toISOString()
-          };
-          const finalMessages = [...messagesWithUser, errorMessage];
-          setMessages(finalMessages);
-          try {
-            await addMessageToChat(chatId, errorMessage);
-          } catch (saveError) {
-            console.error('Error saving error message:', saveError);
+
+    if (architectureData) {
+      await processArchModBotResponse('I have completed the interview.', messagesForApi, updated);
+    } else {
+      await processChatbotResponse(
+        'I have completed the interview.',
+        messagesForApi,
+        updated,
+        {
+          isInterviewed: true,
+          onError: async (messagesWithUser) => {
+            const errorMessage: ChatMessageType = {
+              id: (Date.now() + 1).toString(),
+              type: 'assistant',
+              content: 'Sorry, I encountered an error while processing your request. Please try again.',
+              timestamp: new Date().toISOString()
+            };
+            const finalMessages = [...messagesWithUser, errorMessage];
+            setMessages(finalMessages);
+            try {
+              await addMessageToChat(chatId, errorMessage);
+            } catch (saveError) {
+              console.error('Error saving error message:', saveError);
+            }
           }
         }
-      }
-    );
+      );
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -956,78 +1008,7 @@ const DevPage = () => {
     setTextareaHeight('60px');
 
     if (architectureData) {
-      try {
-        const result = await architectureModificationBot(currentInput, messages, architectureData, user?.id ?? null);
-
-        // Handle insufficient credits
-        if (typeof result === 'object' && result.error === 'INSUFFICIENT_CREDITS') {
-          if (result.remainingCredits !== undefined) {
-            notifyCreditsUpdate(result.remainingCredits);
-          }
-          setShowLowSoulsDialog(true);
-          const assistantMessage: ChatMessageType = {
-            id: Date.now().toString(),
-            type: 'assistant',
-            content: 'Your souls count is low. Please upgrade or buy more souls to continue.',
-            timestamp: new Date().toISOString()
-          };
-          const updatedMessages = [...updatedMessagesWithUser, assistantMessage];
-          setMessages(updatedMessages);
-          setIsLoading(false);
-          await updateChatMessages(chatId, updatedMessages);
-          return;
-        }
-
-        // Notify credits update if available
-        if (typeof result === 'object' && result.remainingCredits !== undefined) {
-          notifyCreditsUpdate(result.remainingCredits);
-        }
-
-        const chatbotResponse = typeof result === 'string' ? result : result.textContent;
-        const parsedClassifier = safeJsonParse(chatbotResponse);
-
-        setCurrentStartOrNot(parsedClassifier.is_change);
-        if (parsedClassifier.is_change) {
-          const assistantMessage: ChatMessageType = {
-            id: Date.now().toString(),
-            type: 'assistant',
-            content: parsedClassifier.verification,
-            timestamp: new Date().toISOString()
-          };
-          const updatedMessages = [...updatedMessagesWithUser, assistantMessage];
-          setMessages(updatedMessages);
-          setIsLoading(false);
-          await genArchitecture(currentInput, messages);
-          await updateChatMessages(chatId, updatedMessages);
-        } else {
-          const assistantMessage: ChatMessageType = {
-            id: Date.now().toString(),
-            type: 'assistant',
-            content: parsedClassifier.general,
-            timestamp: new Date().toISOString()
-          };
-          const updatedMessages = [...updatedMessagesWithUser, assistantMessage];
-          setMessages(updatedMessages);
-          setIsLoading(false);
-          await updateChatMessages(chatId, updatedMessages);
-        }
-      } catch (error) {
-        console.error('Error processing architecture modification:', error);
-        const errorMessage: ChatMessageType = {
-          id: (Date.now() + 1).toString(),
-          type: 'assistant',
-          content: 'Sorry, I encountered an error while processing your request. Please try again.',
-          timestamp: new Date().toISOString()
-        };
-        const finalMessages = [...updatedMessagesWithUser, errorMessage];
-        setMessages(finalMessages);
-        try {
-          await addMessageToChat(chatId, errorMessage);
-        } catch (saveError) {
-          console.error('Error saving error message:', saveError);
-        }
-        setIsLoading(false);
-      }
+      await processArchModBotResponse(currentInput, messages, updatedMessagesWithUser);
     } else {
       await processChatbotResponse(currentInput, messages, updatedMessagesWithUser, {
         onError: async (messagesWithUser) => {

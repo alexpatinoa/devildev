@@ -15,6 +15,7 @@ export interface ChatMessage {
   interviewAnswers?: InterviewAnswer[]; 
   prompt?: string;
   tier2Context?: string;
+  changeRequirement?: string;
 }
 
 // Create a new chat with a specific ID (for localStorage flow)

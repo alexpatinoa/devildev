@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.5.1
+### Added
+- Structured architecture update flow with a user-facing update action
+- Tool-driven agent flow for architecture modification
+- Token-usage based credit accounting for architecture-related AI operations
+
+### Improved
+- Architecture modification dialog and decision logic for clearer tool selection
+- More concise and deterministic agent responses
+- Chat interface now includes per-message inline options for quicker actions
+- Responses include termination metadata
+- Support for partial-result recovery when errors occur
+
 ## v0.5.0
 ### Added
 - Tool-driven chat agent with structured interview flow and clearer multi-stage responses
