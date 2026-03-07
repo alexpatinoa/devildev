@@ -10,14 +10,13 @@ import { ChatMessageList, ChatInput } from '@/components/Dev';
 import { chatbot, architectureModificationBot } from '../../../../actions/agentsFlow';
 import { TerminatingTools, GeneralResponsePayload, InterviewPayload, Tier1Payload, Tier2Payload, UpdateArchitecturePayload, type InterviewAnswer, type InterviewQuestion } from '../../../../types/pToA/tools';
 import { submitFeedback } from '../../../../actions/feedback';
-import { notifyCreditsUpdate, refetchCredits } from '@/lib/credits-events';
-import { generateMainArchitecture, triggerArchitectureGeneration } from '../../../../actions/architecture';
+import { notifyCreditsUpdate } from '@/lib/credits-events';
+import { generateMainArchitecture, updateArchitecture } from '../../../../actions/architecture';
 import { getChat, addMessageToChat, updateChatMessages, createChatWithId, ChatMessage as ChatMessageType, getUserChats } from '../../../../actions/chat';
 import { createArchOptionsFromTier2, getArchOptionsHistory } from '../../../../actions/archOptions';
 import {
   getArchitecture,
   updateComponentPositionsDebounced,
-  checkArchitectureById,
   ArchitectureData,
   ComponentPosition
 } from '../../../../actions/architecturePersistence';
@@ -656,114 +655,55 @@ const DevPage = () => {
     }
   };
 
-  // Function to generate architecture
-  const genArchitecture = async (requirement: string, conversationHistory: any[] = []) => {
+  const genArchitecture = async (requirement: string) => {
+    if (!user?.id) return;
 
     setIsArchitectureLoading(true);
-
-    if (isMobile) {
-      setIsMobilePanelOpen(true);
-    }
+    if (isMobile) setIsMobilePanelOpen(true);
 
     try {
-      if (user?.id) {
-        const generationId = crypto.randomUUID();
+      const currentStackId = allArchitectures[selectedVersionIndex]?.metadata?.stackId ?? undefined;
 
-        const result = await triggerArchitectureGeneration({
-          generationId,
-          requirement,
-          conversationHistory,
-          architectureData,
-          chatId,
-          componentPositions,
-          userId: user.id,
-        });
+      const result = await updateArchitecture({
+        changeRequirement: requirement,
+        chatId,
+        stackId: currentStackId,
+        architecture_data: architectureData,
+        userId: user.id,
+      });
 
-        if (result.success) {
-          // Start polling for the architecture
-          pollForArchitecture(generationId);
-        } else if (result.error === 'INSUFFICIENT_CREDITS') {
-          if (result.remainingCredits !== undefined) {
-            notifyCreditsUpdate(result.remainingCredits);
-          }
-          setShowLowSoulsDialog(true);
-          setIsArchitectureLoading(false);
-        } else {
-          console.error('Failed to trigger architecture generation:', result.error);
-          setIsArchitectureLoading(false);
-        }
+      if (result.success && result.architecture) {
+        if (result.creditsRemaining !== undefined) notifyCreditsUpdate(result.creditsRemaining);
+
+        const newArch = result.architecture as unknown as ArchitectureData;
+        setArchitectureData(newArch);
+        setComponentPositions({});
+        setAllArchitectures(prev => [...prev, {
+          architecture: newArch,
+          componentPositions: {},
+          metadata: {
+            id: result.architecture.id,
+            requirement: result.architecture.requirement ?? null,
+            generatedAt: result.architecture.generatedAt,
+            lastPositionUpdate: result.architecture.lastPositionUpdate,
+            createdAt: result.architecture.createdAt,
+            updatedAt: result.architecture.updatedAt,
+            stackId: result.architecture.stackId ?? null,
+          },
+        }]);
+        setSelectedVersionIndex(prev => prev + 1);
+        setArchitectureGenerated(true);
+      } else if (result.error === 'INSUFFICIENT_CREDITS') {
+        if (result.remainingCredits !== undefined) notifyCreditsUpdate(result.remainingCredits);
+        setShowLowSoulsDialog(true);
+      } else {
+        console.error('Failed to update architecture:', result.error);
       }
     } catch (error) {
-      console.error('Error generating architecture:', error);
+      console.error('Error updating architecture:', error);
+    } finally {
       setIsArchitectureLoading(false);
     }
-  };
-
-  // Function to poll for architecture completion
-  const pollForArchitecture = async (generationId: string) => {
-    const maxAttempts = 120; // Poll for up to 10 minutes total
-    let attempts = 0;
-    const initialPhaseDuration = 4 * 60 * 1000; // 4 minutes in milliseconds
-    const initialPollInterval = 15 * 1000; // 15 seconds for first 4 minutes
-    const finalPollInterval = 5 * 1000; // 5 seconds after 4 minutes
-    const startTime = Date.now();
-
-    const poll = async () => {
-      try {
-        attempts++;
-        const elapsedTime = Date.now() - startTime;
-        const isInitialPhase = elapsedTime < initialPhaseDuration;
-        const currentInterval = isInitialPhase ? initialPollInterval : finalPollInterval;
-
-        const result = await checkArchitectureById(generationId);
-
-        if (result.success && result.exists && result.architecture) {
-          // Architecture found! Update the state
-
-          // Reload all architectures to get the updated list
-          const archResult = await getArchitecture(chatId);
-          if (archResult.success && archResult.architectures && archResult.architectures.length > 0) {
-            setAllArchitectures(archResult.architectures);
-
-            // Set the latest architecture as the selected one
-            const latestIndex = archResult.architectures.length - 1;
-            setSelectedVersionIndex(latestIndex);
-            setArchitectureData(archResult.architectures[latestIndex].architecture);
-            setComponentPositions(archResult.architectures[latestIndex].componentPositions || {});
-          } else {
-            // Fallback to the result architecture if reload fails
-            setArchitectureData(result.architecture);
-            setComponentPositions(result.componentPositions || {});
-          }
-
-          setArchitectureGenerated(true);
-          setIsArchitectureLoading(false);
-
-          // Refetch credits after background job completes
-          if (user?.id) {
-            await refetchCredits(user.id);
-          }
-
-          return;
-        }
-
-        if (attempts >= maxAttempts) {
-          console.error("Polling timeout: Architecture not found after maximum attempts");
-          setIsArchitectureLoading(false);
-          return;
-        }
-
-        // Continue polling with appropriate interval
-        setTimeout(poll, currentInterval);
-
-      } catch (error) {
-        console.error("Error polling for architecture:", error);
-        setIsArchitectureLoading(false);
-      }
-    };
-
-    // Start polling
-    poll();
   };
 
   // Shared logic: call architectureModificationBot, handle credits/parse/assistant message, update state and DB.
@@ -813,7 +753,7 @@ const DevPage = () => {
         setMessages(updatedMessages);
         setIsLoading(false);
         await updateChatMessages(chatId, updatedMessages);
-        await genArchitecture(parsed.payload.changeRequirement, messagesWithUserMessage);
+        await genArchitecture(parsed.payload.changeRequirement);
       } else if (parsed.kind === 'interview_user') {
         const assistantMessage: ChatMessageType = {
           id: Date.now().toString(),
