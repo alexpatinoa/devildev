@@ -18,7 +18,7 @@ import { minSoulsToGenArch } from "../Limits";
 import { TokenUsageCallbackHandler } from "../common/TokenUsageHandler";
 import { db } from "@/lib/db";
 import { createParallelWebSearchTool } from "../tools/parallel";
-import { ARCHITECTURE_GENERATION_PROMPT } from "../prompts/dev/architecture";
+import { ARCHITECTURE_GENERATION_PROMPT, ARCHITECTURE_UPDATE_PROMPT } from "../prompts/dev/architecture";
 const { inngest } = await import('../src/inngest/client');
 
 
@@ -487,6 +487,88 @@ export async function generateMainArchitecture({
 
   } catch (error) {
     console.error("Error in generateMainArchitecture:", error);
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+  }
+}
+
+export async function updateArchitecture({
+  changeRequirement,
+  chatId,
+  stackId,
+  architecture_data,
+  userId,
+}: {
+  changeRequirement: string;
+  chatId: string;
+  stackId?: string;
+  architecture_data: any;
+  userId: string;
+}) {
+  const creditsResult = await getCredits(userId);
+  if (creditsResult.success && creditsResult.credits !== undefined && creditsResult.credits < minSoulsToGenArch) {
+    return { success: false, error: 'INSUFFICIENT_CREDITS', remainingCredits: creditsResult.credits };
+  }
+
+  const tokenUsageHandler = new TokenUsageCallbackHandler();
+
+  try {
+    const llm = new ChatOpenAI({ openAIApiKey: process.env.OPENAI_API_KEY, model: "gpt-5-mini-2025-08-07" });
+
+    const prompt = PromptTemplate.fromTemplate(ARCHITECTURE_UPDATE_PROMPT);
+
+    const structuredLlm = llm.withStructuredOutput(architectureJsonSchemaWithPrd);
+    const chain = prompt.pipe(structuredLlm);
+
+    const updatedArchitecture = await chain.invoke(
+      {
+        changeRequirement,
+        currentArchitecture: JSON.stringify(architecture_data),
+      },
+      { callbacks: [tokenUsageHandler] }
+    );
+
+    const dbOps: any[] = [
+      db.architecture.create({
+        data: {
+          chatId,
+          stackId,
+          requirement: changeRequirement,
+          architectureRationale: updatedArchitecture.architectureRationale,
+          components: updatedArchitecture.components,
+          connectionLabels: updatedArchitecture.connectionLabels || {},
+          componentPositions: {},
+        },
+      }),
+    ];
+
+    if (stackId) {
+      dbOps.push(
+        db.stack.update({
+          where: { id: stackId },
+          data: { prd: updatedArchitecture.prd },
+        })
+      );
+    }
+
+    const [newArchitecture] = await db.$transaction(dbOps);
+
+    const usage = tokenUsageHandler.getUsage();
+    const creditResult = await deductCredits(userId, usage.inputTokens, usage.outputTokens);
+    if (!creditResult.success) {
+      console.error("Failed to deduct credits:", creditResult.error);
+    } else {
+      console.log(`Credits deducted: ${creditResult.deducted}, remaining: ${creditResult.remaining}`);
+    }
+
+    return {
+      success: true,
+      architecture: newArchitecture,
+      prd: updatedArchitecture.prd,
+      creditsRemaining: creditResult.remaining,
+    };
+
+  } catch (error) {
+    console.error("Error in updateArchitecture:", error);
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
   }
 }
