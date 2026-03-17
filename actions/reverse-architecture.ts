@@ -621,7 +621,6 @@ export async function generateArchitecture(projectId: string, repoTree?: any, us
 
     const stringifiedPackageJson = JSON.stringify(project.packageJson);
     const stringifiedRepoContent = JSON.stringify(project.repoContent);
-    const stringifiedDefaultBranch = project.defaultBranch;
 
     const { name, framework, packageJson, repoContent, repoFullName, defaultBranch, user } = project;
     const { githubUsername, githubAccessToken } = user;
@@ -951,7 +950,6 @@ export async function triggerReverseArchitectureGeneration(data: {
   }
 
   try {
-    
     
     const response = await inngest.send({
       name: "reverse-architecture/generate",

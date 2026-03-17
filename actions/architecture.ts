@@ -17,7 +17,6 @@ import { deductCredits, getCredits } from "./credits";
 import { minSoulsToGenArch } from "../Limits";
 import { TokenUsageCallbackHandler } from "../common/TokenUsageHandler";
 import { db } from "@/lib/db";
-import { createParallelWebSearchTool } from "../tools/parallel";
 import { ARCHITECTURE_GENERATION_PROMPT, ARCHITECTURE_UPDATE_PROMPT } from "../prompts/dev/architecture";
 const { inngest } = await import('../src/inngest/client');
 
