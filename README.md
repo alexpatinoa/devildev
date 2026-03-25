@@ -20,6 +20,10 @@
 </p>
 
 <p align="center">
+  <a href="https://trendshift.io/repositories/19316" target="_blank"><img src="https://trendshift.io/api/badge/repositories/19316" alt="lak7%2Fdevildev | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+</p>
+
+<p align="center">
   <img src="public/devildev-architecture.png" alt="DevilDev Architecture Preview" width="125%">
 </p>
 
