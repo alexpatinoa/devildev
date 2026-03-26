@@ -15,7 +15,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import HomeNav from '@/components/core/HomeNav';
 import GithubOAuthDeprecatedNotice from '@/components/GithubOAuthDeprecatedNotice';
 import PricingDialog from '@/components/PricingDialog';
-import OpenSourceDialog from '@/components/OpenSrcDialog';
 import WelcomeDialog from '@/components/WelcomeDialog';
 import AnimatedGradientText from '@/components/AnimatedGradientText';
 
@@ -68,7 +67,6 @@ export default function Page() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const isMobile = useMediaQuery('(max-width: 640px)'); 
   const [showMaxChatsDialog, setShowMaxChatsDialog] = useState(false);
-  const [isOpenSourceDialogOpen, setIsOpenSourceDialogOpen] = useState(false);
   const [isWelcomeDialogOpen, setIsWelcomeDialogOpen] = useState(false);
   // Typewriter rotating heading state
   const rotatingTexts = ["Find best way to build", "Visualize your Codebase"];
@@ -166,16 +164,6 @@ export default function Page() {
       window.history.replaceState({}, document.title, window.location.pathname);
     }
 
-    // Only show the Open Source dialog once per user (per browser)
-    try {
-      const hasSeenOpenSourceDialog = localStorage.getItem('hasSeenOpenSourceDialog');
-      if (!hasSeenOpenSourceDialog) {
-        setIsOpenSourceDialogOpen(true);
-      }
-    } catch (error) {
-      console.error('Error accessing localStorage for Open Source dialog:', error);
-    }
-
     const firstMessage = localStorage.getItem('firstMessage');
     if (firstMessage) {
       setInputMessage(firstMessage);
@@ -256,18 +244,6 @@ export default function Page() {
         <div className="hidden lg:block">
           <HomeNav currentPage="Home"/>
         </div>
-
-        <OpenSourceDialog
-          isOpen={isOpenSourceDialogOpen}
-          onClose={() => {
-            try {
-              localStorage.setItem('hasSeenOpenSourceDialog', 'true');
-            } catch (error) {
-              console.error('Error setting Open Source dialog flag in localStorage:', error);
-            }
-            setIsOpenSourceDialogOpen(false);
-          }}
-        />
         <WelcomeDialog
           isOpen={isWelcomeDialogOpen}
           onClose={() => {
